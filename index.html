@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,6 +17,7 @@
       color: white;
       padding: 20px;
       text-align: center;
+      animation: fadeIn 2s ease-in-out;
     }
     section {
       padding: 20px;
@@ -33,10 +34,21 @@
     .food-item {
       max-width: 300px;
       text-align: center;
+      background: #fff3e0;
+      border-radius: 10px;
+      padding: 10px;
+      transition: transform 0.3s ease;
+    }
+    .food-item:hover {
+      transform: scale(1.05);
     }
     .food-item img {
       width: 100%;
       border-radius: 10px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
     }
   </style>
 </head>
@@ -64,6 +76,22 @@
       <div class="food-item">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/28/South_Indian_Meal.jpg" alt="South Indian Thali">
         <p>South Indian Thali</p>
+      </div>
+      <div class="food-item">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Uttapam.jpg" alt="Uttapam">
+        <p>Uttapam</p>
+      </div>
+      <div class="food-item">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/Appam_with_stew.jpg" alt="Appam with Stew">
+        <p>Appam with Stew</p>
+      </div>
+      <div class="food-item">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/d/d1/Vada_Sambar.jpg" alt="Medu Vada">
+        <p>Medu Vada</p>
+      </div>
+      <div class="food-item">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6d/Sambar_rice.JPG" alt="Sambar Rice">
+        <p>Sambar Rice</p>
       </div>
     </div>
   </section>
