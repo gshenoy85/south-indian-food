@@ -1,99 +1,46 @@
 <!DOCTYPE html>
-<html lang="="en">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>South Indian Foods</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #fff8f0;
-      color: #333;
-    }
-    header {
-      background-color: #e65100;
-      color: white;
-      padding: 20px;
-      text-align: center;
-      animation: fadeIn 2s ease-in-out;
-    }
-    section {
-      padding: 20px;
-    }
-    h2 {
-      color: #bf360c;
-    }
-    .food-gallery {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 20px;
-      justify-content: center;
-    }
-    .food-item {
-      max-width: 300px;
-      text-align: center;
-      background: #fff3e0;
-      border-radius: 10px;
-      padding: 10px;
-      transition: transform 0.3s ease;
-    }
-    .food-item:hover {
-      transform: scale(1.05);
-    }
-    .food-item img {
-      width: 100%;
-      border-radius: 10px;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>South Indian Delights</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
-    <h1>Discover South Indian Cuisine</h1>
-    <p>A showcase of delicious foods from South India</p>
+    <h1>South Indian Delights</h1>
+    <p>Authentic Tastes of the South, Served Fresh</p>
   </header>
 
-  <section>
-    <h2>Popular Dishes</h2>
-    <div class="food-gallery">
-      <div class="food-item">
-        <img src="https://vaya.in/recipes/details/idli-and-sambar-recipe/" alt="Idli Sambar">
-        <p>Idli Sambar</p>
+  <main>
+    <section class="food-grid">
+      <!-- Food 1 -->
+      <div class="food-card">
+        <img src="images/masala-dosa.jpg" alt="Masala Dosa" />
+        <h2>Masala Dosa</h2>
+        <p><strong>Origin:</strong> Karnataka</p>
+        <p>A crispy rice crepe filled with spiced potato mash. Served with chutney and sambar.</p>
+        <p><strong>Ingredients:</strong> Rice, urad dal, potatoes, mustard seeds, curry leaves</p>
+        <p><strong>Best Places:</strong> Vidyarthi Bhavan, CTR (Malleshwaram), MTR</p>
       </div>
-      <div class="food-item">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/7/7a/Masala_dosa_from_Karnataka.jpg" alt="Masala Dosa">
-        <p>Masala Dosa</p>
+
+      <!-- Food 2 -->
+      <div class="food-card">
+        <img src="images/idli.jpg" alt="Idli" />
+        <h2>Idli</h2>
+        <p><strong>Origin:</strong> Tamil Nadu</p>
+        <p>Steamed rice cakes, soft and fluffy, typically eaten with sambar and coconut chutney.</p>
+        <p><strong>Ingredients:</strong> Rice, urad dal, salt</p>
+        <p><strong>Best Places:</strong> Brahmin's Coffee Bar, Veena Stores</p>
       </div>
-      <div class="food-item">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/7/75/Veg_Pongal.JPG" alt="Pongal">
-        <p>Pongal</p>
-      </div>
-      <div class="food-item">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/2/28/South_Indian_Meal.jpg" alt="South Indian Thali">
-        <p>South Indian Thali</p>
-      </div>
-      <div class="food-item">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/6/60/Uttapam.jpg" alt="Uttapam">
-        <p>Uttapam</p>
-      </div>
-      <div class="food-item">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/Appam_with_stew.jpg" alt="Appam with Stew">
-        <p>Appam with Stew</p>
-      </div>
-      <div class="food-item">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/d/d1/Vada_Sambar.jpg" alt="Medu Vada">
-        <p>Medu Vada</p>
-      </div>
-      <div class="food-item">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/6/6d/Sambar_rice.JPG" alt="Sambar Rice">
-        <p>Sambar Rice</p>
-      </div>
-    </div>
-  </section>
+
+      <!-- Add remaining 4 dishes similarly -->
+      <!-- Appam, Vada, Pesarattu, Biryani -->
+    </section>
+  </main>
+
+  <footer>
+    <p>Images from Shutterstock for demo only | Site by Nishant</p>
+  </footer>
 </body>
 </html>
