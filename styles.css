@@ -1,0 +1,53 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background-image: url('images/bangalore-bg.jpg');
+  background-size: cover;
+  background-attachment: fixed;
+  color: #fff;
+  backdrop-filter: blur(3px);
+}
+
+header {
+  background: rgba(0, 0, 0, 0.6);
+  padding: 2rem;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 3rem;
+  margin: 0;
+}
+
+header p {
+  font-size: 1.2rem;
+  margin-top: 0.5rem;
+}
+
+.food-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
+  padding: 2rem;
+}
+
+.food-card {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #000;
+  padding: 1rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.food-card img {
+  width: 100%;
+  border-radius: 8px;
+  height: auto;
+}
+
+footer {
+  text-align: center;
+  padding: 1rem;
+  background-color: rgba(0, 0, 0, 0.6);
+  font-size: 0.9rem;
+}
