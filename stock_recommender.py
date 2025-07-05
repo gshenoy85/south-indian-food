@@ -31,21 +31,100 @@ STOCKS = {
     "Small Cap": ["HATSUN", "BALAMINES"]
 }
 
-# ------------------- To Categorise Metrics -------------------
-METRIC_CATEGORIES = {
+# ------------------- Comprehensive Metric Categories -------------------
+METRIC_CATEGORY_PATTERNS = {
     "Income Statement": [
-        "Sales", "Operating Profit", "Net Profit +", "Other Income +", "EBITDA", "Interest", "Tax %"
+        # Revenue and Sales
+        r".*sales.*", r".*revenue.*", r".*income.*", r".*turnover.*",
+        # Profitability
+        r".*profit.*", r".*earnings.*", r".*ebit.*", r".*ebitda.*", 
+        r".*operating profit.*", r".*net profit.*", r".*gross profit.*",
+        r".*pbt.*", r".*pat.*",
+        # Expenses
+        r".*expense.*", r".*cost.*", r".*depreciation.*", r".*amortization.*",
+        r".*interest.*", r".*tax.*", r".*provision.*",
+        # Other Income Statement items
+        r".*other income.*", r".*exceptional.*", r".*extraordinary.*"
     ],
     "Balance Sheet": [
-        "Total Assets", "Total Liabilities", "Reserves", "Equity Capital", "Investments", "Other Assets +"
+        # Assets
+        r".*assets.*", r".*fixed assets.*", r".*current assets.*", 
+        r".*non.current assets.*", r".*tangible assets.*", r".*intangible assets.*",
+        r".*investments.*", r".*cash.*", r".*bank.*", r".*inventory.*",
+        r".*receivables.*", r".*debtors.*", r".*advances.*",
+        # Liabilities
+        r".*liabilities.*", r".*current liabilities.*", r".*non.current liabilities.*",
+        r".*payables.*", r".*creditors.*", r".*provisions.*", r".*borrowings.*",
+        r".*debt.*", r".*loans.*",
+        # Equity
+        r".*equity.*", r".*capital.*", r".*reserves.*", r".*surplus.*",
+        r".*share capital.*", r".*retained earnings.*"
     ],
     "Cash Flow": [
-        "Cash from Operating Activity", "Cash from Investing Activity", "Cash from Financing Activity", "Net Cash Flow"
+        r".*cash flow.*", r".*operating.*activity.*", r".*investing.*activity.*",
+        r".*financing.*activity.*", r".*free cash flow.*", r".*net cash.*",
+        r".*cash generated.*", r".*cash used.*"
     ],
     "Financial Ratios": [
-        "ROE", "ROCE %", "EPS", "Debt to Equity", "Current Ratio", "Inventory Turnover", "Interest Coverage Ratio"
+        # Profitability Ratios
+        r".*roe.*", r".*roi.*", r".*roce.*", r".*roic.*", r".*roa.*",
+        r".*margin.*", r".*operating margin.*", r".*net margin.*", 
+        r".*gross margin.*", r".*ebitda margin.*",
+        # Liquidity Ratios
+        r".*current ratio.*", r".*quick ratio.*", r".*cash ratio.*",
+        # Leverage Ratios
+        r".*debt.*equity.*", r".*debt.*total.*", r".*interest coverage.*",
+        r".*debt service coverage.*", r".*financial leverage.*",
+        # Efficiency Ratios
+        r".*turnover.*", r".*days.*", r".*inventory turnover.*", 
+        r".*receivables turnover.*", r".*asset turnover.*",
+        # Market Ratios
+        r".*pe.*", r".*pb.*", r".*price.*book.*", r".*price.*earnings.*",
+        r".*dividend yield.*", r".*dividend payout.*"
+    ],
+    "Per Share Data": [
+        r".*per share.*", r".*eps.*", r".*book value.*share.*", 
+        r".*cash.*share.*", r".*dividend.*share.*", r".*sales.*share.*"
+    ],
+    "Valuation Metrics": [
+        r".*market cap.*", r".*enterprise value.*", r".*ev.*", 
+        r".*price.*sales.*", r".*price.*cash.*", r".*market.*book.*"
+    ],
+    "Other Financial Metrics": [
+        r".*working capital.*", r".*net worth.*", r".*face value.*",
+        r".*book value.*", r".*intrinsic value.*", r".*fair value.*"
     ]
 }
+
+# ------------------- Dynamic Metric Categories -------------------
+DYNAMIC_METRIC_CATEGORIES = {
+    "Income Statement": set(),
+    "Balance Sheet": set(),
+    "Cash Flow": set(),
+    "Financial Ratios": set(),
+    "Per Share Data": set(),
+    "Valuation Metrics": set(),
+    "Other Financial Metrics": set()
+}
+
+def categorize_metric(metric_name: str) -> str:
+    """Automatically categorize a metric based on its name using pattern matching"""
+    metric_lower = metric_name.lower().strip()
+    
+    # Check each category's patterns
+    for category, patterns in METRIC_CATEGORY_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, metric_lower):
+                DYNAMIC_METRIC_CATEGORIES[category].add(metric_name)
+                return category
+    
+    # Default category for unmatched metrics
+    DYNAMIC_METRIC_CATEGORIES["Other Financial Metrics"].add(metric_name)
+    return "Other Financial Metrics"
+
+def get_all_metric_categories() -> Dict:
+    """Get all metric categories including dynamically discovered ones"""
+    return {k: list(v) for k, v in DYNAMIC_METRIC_CATEGORIES.items() if v}
 
 # ------------------- Batch Loader -------------------
 def load_all_data():
@@ -68,7 +147,7 @@ def load_all_data():
                     data, quarters, stock_category, industry = get_financial_data(stock)
                     if data and quarters:
                         insert_quarterly_to_snowflake(conn, stock, data, quarters, stock_category, industry)
-                        logger.info(f"✅ Successfully loaded {stock}")
+                        logger.info(f"✅ Successfully loaded {stock} with {len(data)} metrics")
                     else:
                         logger.warning(f"⚠️ No data found for {stock}")
                 except Exception as e:
@@ -76,10 +155,17 @@ def load_all_data():
                     continue
                 
                 # Add delay to avoid overwhelming the server
-                time.sleep(1)
+                time.sleep(2)
         
         conn.close()
-        logger.info("✅ All data loaded successfully")
+        
+        # Log summary of discovered metrics
+        total_metrics = sum(len(metrics) for metrics in DYNAMIC_METRIC_CATEGORIES.values())
+        logger.info(f"✅ All data loaded successfully! Discovered {total_metrics} unique metrics")
+        
+        for category, metrics in DYNAMIC_METRIC_CATEGORIES.items():
+            if metrics:
+                logger.info(f"📊 {category}: {len(metrics)} metrics")
         
     except Exception as e:
         logger.error(f"❌ Error during data loading: {e}")
@@ -95,10 +181,10 @@ def quarterly_view(stock):
         cur = conn.cursor()
 
         cur.execute("""
-            SELECT METRIC, QUARTER, VALUE
+            SELECT METRIC, QUARTER, VALUE, METRIC_CATEGORY
             FROM FINANCIALS_QUARTERLY
             WHERE STOCK_CODE=%s
-            ORDER BY QUARTER
+            ORDER BY METRIC_CATEGORY, METRIC, QUARTER
         """, (stock,))
         rows = cur.fetchall()
 
@@ -107,10 +193,12 @@ def quarterly_view(stock):
 
         financial_data = {}
         quarters = []
+        categories = {}
 
-        for metric, quarter, value in rows:
+        for metric, quarter, value, metric_category in rows:
             if metric not in financial_data:
                 financial_data[metric] = {}
+                categories[metric] = metric_category
             financial_data[metric][quarter] = value
             if quarter not in quarters:
                 quarters.append(quarter)
@@ -118,18 +206,20 @@ def quarterly_view(stock):
         # Sort quarters chronologically
         quarters.sort()
 
-        # Convert row format
-        formatted = {
-            metric: [financial_data[metric].get(q, "") for q in quarters]
-            for metric in financial_data
-        }
+        # Convert row format and group by category
+        categorized_data = {}
+        for metric, quarter_data in financial_data.items():
+            category = categories[metric]
+            if category not in categorized_data:
+                categorized_data[category] = {}
+            categorized_data[category][metric] = [quarter_data.get(q, "") for q in quarters]
 
         conn.close()
         return render_template("quarterly.html",
                                stock=stock,
                                quarters=quarters,
-                               financial_data=json.dumps(formatted),
-                               metric_categories=METRIC_CATEGORIES)
+                               financial_data=json.dumps(categorized_data),
+                               metric_categories=categorized_data)
     
     except Exception as e:
         logger.error(f"Error in quarterly view for {stock}: {e}")
@@ -142,9 +232,10 @@ def sector_view(sector):
         cur = conn.cursor()
 
         cur.execute("""
-            SELECT STOCK_CODE, METRIC, QUARTER, VALUE
+            SELECT STOCK_CODE, METRIC, QUARTER, VALUE, METRIC_CATEGORY
             FROM FINANCIALS_QUARTERLY
             WHERE CATEGORY=%s
+            ORDER BY METRIC_CATEGORY, STOCK_CODE, METRIC
         """, (sector,))
         rows = cur.fetchall()
 
@@ -153,25 +244,32 @@ def sector_view(sector):
 
         sector_data = {}
         quarters = set()
-        for stock, metric, quarter, value in rows:
+        
+        for stock, metric, quarter, value, metric_category in rows:
             quarters.add(quarter)
-            key = (stock, metric)
+            key = (stock, metric, metric_category)
             if key not in sector_data:
                 sector_data[key] = {}
             sector_data[key][quarter] = value
 
         quarters = sorted(quarters)
 
-        formatted_data = {
-            f"{stock} - {metric}": [sector_data[(stock, metric)].get(q, "") for q in quarters]
-            for (stock, metric) in sector_data
-        }
+        # Group by metric category
+        categorized_data = {}
+        for (stock, metric, metric_category), quarter_data in sector_data.items():
+            if metric_category not in categorized_data:
+                categorized_data[metric_category] = {}
+            
+            display_key = f"{stock} - {metric}"
+            categorized_data[metric_category][display_key] = [
+                quarter_data.get(q, "") for q in quarters
+            ]
 
         conn.close()
         return render_template("sector.html",
                                sector=sector,
                                quarters=quarters,
-                               financial_data=json.dumps(formatted_data))
+                               financial_data=json.dumps(categorized_data))
     
     except Exception as e:
         logger.error(f"Error in sector view for {sector}: {e}")
@@ -187,43 +285,66 @@ def visualize():
     try:
         conn = snowflake_connect()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM FINANCIALS_QUARTERLY WHERE STOCK_CODE=%s", (stock,))
+        
+        # Select only the columns we need to avoid datetime serialization issues
+        cur.execute("""
+            SELECT STOCK_CODE, METRIC, QUARTER, VALUE, INDUSTRY, CATEGORY, METRIC_CATEGORY
+            FROM FINANCIALS_QUARTERLY 
+            WHERE STOCK_CODE=%s
+            ORDER BY METRIC_CATEGORY, METRIC, QUARTER
+        """, (stock,))
         rows = cur.fetchall()
 
         if not rows:
             return f"<h2>No data found in Snowflake for {stock}</h2>"
 
-        financial_data = {}
-        years = ["2025", "2024", "2023", "2022", "2021"]  # <- replace generic labels
+        # Group data by metric category and quarter
+        categorized_data = {}
+        quarters = set()
+        
+        for stock_code, metric, quarter, value, industry, category, metric_category in rows:
+            quarters.add(quarter)
+            
+            if metric_category not in categorized_data:
+                categorized_data[metric_category] = {}
+            if metric not in categorized_data[metric_category]:
+                categorized_data[metric_category][metric] = {}
+            
+            categorized_data[metric_category][metric][quarter] = value
 
-        for row in rows:
-            metric = row[1]
-            values = row[2:7]
-            financial_data[metric] = values
+        # Sort quarters chronologically
+        quarters = sorted(quarters)
+
+        # Convert to format expected by template
+        formatted_data = {}
+        for category, metrics in categorized_data.items():
+            formatted_data[category] = {}
+            for metric, quarter_data in metrics.items():
+                formatted_data[category][metric] = [quarter_data.get(q, "") for q in quarters]
 
         conn.close()
         return render_template("visualize.html",
                             stock=stock,
-                            years=years,
-                            financial_data=json.dumps(financial_data),
-                            metric_categories=METRIC_CATEGORIES)
+                            years=quarters,  # Use actual quarters instead of generic years
+                            financial_data=json.dumps(formatted_data),
+                            metric_categories=formatted_data)
     
     except Exception as e:
         logger.error(f"Error in visualize for {stock}: {e}")
         return f"<h2>Error loading data for {stock}</h2>"
 
-# ------------------- Screener Scraper -------------------
+# ------------------- Enhanced Screener Scraper -------------------
 def clean_metric_name(metric_name: str) -> str:
     """Clean metric name while preserving important special characters"""
     # Remove unwanted whitespace and non-breaking spaces
     cleaned = metric_name.strip().replace("\xa0", " ")
-    # Remove extra spaces
+    # Remove extra spaces but preserve + and other meaningful characters
     cleaned = re.sub(r'\s+', ' ', cleaned)
     return cleaned
 
 def clean_value(val: str) -> str:
     """Clean financial values while preserving numbers and percentages"""
-    if not val or val == "-":
+    if not val or val == "-" or val.lower() == "n/a":
         return ""
     
     # Remove unwanted characters but preserve important ones
@@ -243,6 +364,10 @@ def clean_value(val: str) -> str:
     # Remove + sign from values only (not from metric names)
     val = val.replace("+", "")
     
+    # Handle special cases like "1.5x", "2.3times"
+    if re.match(r"^-?\d+(\.\d+)?(x|times)$", val.lower()):
+        return re.sub(r'(x|times)$', '', val.lower())
+    
     # Validate numeric values
     if re.match(r"^-?\d+(\.\d+)?$", val):
         return val
@@ -251,11 +376,11 @@ def clean_value(val: str) -> str:
 
 def get_financial_data(stock_code: str) -> Tuple[Dict, List, str, str]:
     """
-    Fetch financial data from screener.in with improved error handling
+    Fetch ALL financial data from screener.in with comprehensive scraping
     Returns: (data_dict, quarters_list, category, industry)
     """
     url = SCREENER_URL.format(stock_code)
-    logger.info(f"🔎 Fetching {stock_code} from: {url}")
+    logger.info(f"🔎 Fetching ALL metrics for {stock_code} from: {url}")
     
     try:
         res = requests.get(url, headers=HEADERS, timeout=30)
@@ -270,10 +395,10 @@ def get_financial_data(stock_code: str) -> Tuple[Dict, List, str, str]:
         # Extract industry and sector/category info
         category, industry = extract_company_info(soup)
         
-        # Extract quarterly data
-        data, quarters = extract_quarterly_data(soup, stock_code)
+        # Extract ALL financial data from multiple sections
+        all_data, quarters = extract_all_financial_data(soup, stock_code)
         
-        return data, quarters, category, industry
+        return all_data, quarters, category, industry
         
     except requests.RequestException as e:
         logger.error(f"❌ Request failed for {stock_code}: {e}")
@@ -298,8 +423,54 @@ def extract_company_info(soup: BeautifulSoup) -> Tuple[str, str]:
     
     return "", ""
 
+def extract_all_financial_data(soup: BeautifulSoup, stock_code: str) -> Tuple[Dict, List]:
+    """Extract ALL financial data from multiple sections of the page"""
+    all_data = {}
+    quarters = []
+    
+    try:
+        # 1. Extract Quarterly Results (main financial statements)
+        quarterly_data, quarterly_quarters = extract_quarterly_data(soup, stock_code)
+        if quarterly_data and quarterly_quarters:
+            all_data.update(quarterly_data)
+            quarters = quarterly_quarters
+        
+        # 2. Extract Annual Results if available
+        annual_data, annual_quarters = extract_annual_data(soup, stock_code)
+        if annual_data:
+            all_data.update(annual_data)
+            if not quarters:
+                quarters = annual_quarters
+        
+        # 3. Extract Ratios section
+        ratios_data = extract_ratios_data(soup, stock_code, quarters)
+        if ratios_data:
+            all_data.update(ratios_data)
+        
+        # 4. Extract Balance Sheet details
+        balance_sheet_data = extract_balance_sheet_data(soup, stock_code, quarters)
+        if balance_sheet_data:
+            all_data.update(balance_sheet_data)
+        
+        # 5. Extract Cash Flow details
+        cashflow_data = extract_cashflow_data(soup, stock_code, quarters)
+        if cashflow_data:
+            all_data.update(cashflow_data)
+        
+        # 6. Extract Per Share data
+        per_share_data = extract_per_share_data(soup, stock_code, quarters)
+        if per_share_data:
+            all_data.update(per_share_data)
+        
+        logger.info(f"📊 Extracted {len(all_data)} total metrics for {stock_code}")
+        return all_data, quarters
+        
+    except Exception as e:
+        logger.error(f"Error extracting all financial data for {stock_code}: {e}")
+        return {}, []
+
 def extract_quarterly_data(soup: BeautifulSoup, stock_code: str) -> Tuple[Dict, List]:
-    """Extract quarterly financial data from the page"""
+    """Extract quarterly financial data from the main quarterly table"""
     quarterly_table = soup.find("section", id="quarters")
     if not quarterly_table:
         logger.warning(f"⚠️ Quarterly data not found for {stock_code}")
@@ -331,14 +502,168 @@ def extract_quarterly_data(soup: BeautifulSoup, stock_code: str) -> Tuple[Dict, 
             if metric and any(v for v in values):
                 data[metric] = values
 
-        logger.info(f"📊 Extracted {len(data)} metrics for {stock_code}")
+        logger.info(f"📈 Extracted {len(data)} quarterly metrics for {stock_code}")
         return data, quarters
         
     except Exception as e:
         logger.error(f"Error extracting quarterly data for {stock_code}: {e}")
         return {}, []
 
-# ------------------- Snowflake Integration -------------------
+def extract_annual_data(soup: BeautifulSoup, stock_code: str) -> Tuple[Dict, List]:
+    """Extract annual financial data if available"""
+    annual_table = soup.find("section", id="profit-loss")
+    if not annual_table:
+        return {}, []
+    
+    try:
+        # Similar logic to quarterly but for annual data
+        header_cells = annual_table.select("thead tr th")[1:]
+        years = [th.get_text().strip() for th in header_cells]
+        
+        data = {}
+        for row in annual_table.select("tbody tr"):
+            cols = row.find_all("td")
+            if len(cols) < len(years) + 1:
+                continue
+            
+            metric = clean_metric_name(cols[0].get_text())
+            values = [clean_value(td.get_text()) for td in cols[1:len(years)+1]]
+            
+            if metric and any(v for v in values):
+                # Prefix to distinguish from quarterly
+                data[f"Annual {metric}"] = values
+        
+        logger.info(f"📅 Extracted {len(data)} annual metrics for {stock_code}")
+        return data, years
+        
+    except Exception as e:
+        logger.warning(f"Could not extract annual data for {stock_code}: {e}")
+        return {}, []
+
+def extract_ratios_data(soup: BeautifulSoup, stock_code: str, quarters: List) -> Dict:
+    """Extract financial ratios from ratios section"""
+    try:
+        # Look for ratios in various possible sections
+        ratios_sections = soup.find_all("section", class_=re.compile(r".*ratio.*", re.I))
+        if not ratios_sections:
+            # Try alternative selectors
+            ratios_sections = soup.find_all("div", class_=re.compile(r".*ratio.*", re.I))
+        
+        data = {}
+        for section in ratios_sections:
+            table = section.find("table")
+            if not table:
+                continue
+                
+            for row in table.select("tbody tr"):
+                cols = row.find_all("td")
+                if len(cols) >= 2:
+                    metric = clean_metric_name(cols[0].get_text())
+                    # For ratios, we might have different data structure
+                    values = [clean_value(td.get_text()) for td in cols[1:]]
+                    
+                    if metric and any(v for v in values):
+                        # Pad or trim values to match quarters length
+                        while len(values) < len(quarters):
+                            values.append("")
+                        values = values[:len(quarters)]
+                        data[metric] = values
+        
+        if data:
+            logger.info(f"📊 Extracted {len(data)} ratio metrics for {stock_code}")
+        return data
+        
+    except Exception as e:
+        logger.warning(f"Could not extract ratios for {stock_code}: {e}")
+        return {}
+
+def extract_balance_sheet_data(soup: BeautifulSoup, stock_code: str, quarters: List) -> Dict:
+    """Extract detailed balance sheet data"""
+    try:
+        balance_sheet_section = soup.find("section", id="balance-sheet")
+        if not balance_sheet_section:
+            return {}
+        
+        data = {}
+        for table in balance_sheet_section.find_all("table"):
+            for row in table.select("tbody tr"):
+                cols = row.find_all("td")
+                if len(cols) >= len(quarters) + 1:
+                    metric = clean_metric_name(cols[0].get_text())
+                    values = [clean_value(td.get_text()) for td in cols[1:len(quarters)+1]]
+                    
+                    if metric and any(v for v in values):
+                        data[metric] = values
+        
+        if data:
+            logger.info(f"🏦 Extracted {len(data)} balance sheet metrics for {stock_code}")
+        return data
+        
+    except Exception as e:
+        logger.warning(f"Could not extract balance sheet data for {stock_code}: {e}")
+        return {}
+
+def extract_cashflow_data(soup: BeautifulSoup, stock_code: str, quarters: List) -> Dict:
+    """Extract cash flow statement data"""
+    try:
+        cashflow_section = soup.find("section", id="cash-flow")
+        if not cashflow_section:
+            return {}
+        
+        data = {}
+        for table in cashflow_section.find_all("table"):
+            for row in table.select("tbody tr"):
+                cols = row.find_all("td")
+                if len(cols) >= len(quarters) + 1:
+                    metric = clean_metric_name(cols[0].get_text())
+                    values = [clean_value(td.get_text()) for td in cols[1:len(quarters)+1]]
+                    
+                    if metric and any(v for v in values):
+                        data[metric] = values
+        
+        if data:
+            logger.info(f"💰 Extracted {len(data)} cash flow metrics for {stock_code}")
+        return data
+        
+    except Exception as e:
+        logger.warning(f"Could not extract cash flow data for {stock_code}: {e}")
+        return {}
+
+def extract_per_share_data(soup: BeautifulSoup, stock_code: str, quarters: List) -> Dict:
+    """Extract per share data and other key metrics"""
+    try:
+        # Look for per share data in various sections
+        data = {}
+        
+        # Check for per share ratios or metrics
+        for section in soup.find_all("section"):
+            tables = section.find_all("table")
+            for table in tables:
+                for row in table.select("tbody tr"):
+                    cols = row.find_all("td")
+                    if len(cols) >= 2:
+                        metric = clean_metric_name(cols[0].get_text())
+                        
+                        # Check if this is a per share metric
+                        if any(keyword in metric.lower() for keyword in ['per share', 'eps', 'book value', 'dividend']):
+                            if len(cols) >= len(quarters) + 1:
+                                values = [clean_value(td.get_text()) for td in cols[1:len(quarters)+1]]
+                            else:
+                                # Handle single value metrics
+                                values = [clean_value(cols[1].get_text())] + [""] * (len(quarters) - 1)
+                            
+                            if any(v for v in values):
+                                data[metric] = values
+        
+        if data:
+            logger.info(f"📈 Extracted {len(data)} per share metrics for {stock_code}")
+        return data
+        
+    except Exception as e:
+        logger.warning(f"Could not extract per share data for {stock_code}: {e}")
+        return {}
+
+# ------------------- Enhanced Snowflake Integration -------------------
 def snowflake_connect():
     """Create Snowflake connection with better error handling"""
     try:
@@ -368,12 +693,12 @@ def snowflake_connect():
         raise
 
 def create_snowflake_table():
-    """Create the financials table if it doesn't exist"""
+    """Create the enhanced financials table if it doesn't exist"""
     try:
         conn = snowflake_connect()
         cur = conn.cursor()
         
-        logger.info("📋 Creating/checking Snowflake table...")
+        logger.info("📋 Creating/checking enhanced Snowflake table...")
         
         cur.execute("""
             CREATE TABLE IF NOT EXISTS FINANCIALS_QUARTERLY (
@@ -383,6 +708,8 @@ def create_snowflake_table():
                 VALUE STRING,
                 INDUSTRY STRING,
                 CATEGORY STRING,
+                METRIC_CATEGORY STRING,
+                DATA_SOURCE STRING DEFAULT 'SCREENER',
                 CREATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
                 UPDATED_AT TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
             )
@@ -394,16 +721,21 @@ def create_snowflake_table():
             ON FINANCIALS_QUARTERLY (STOCK_CODE, METRIC, QUARTER)
         """)
         
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_metric_category 
+            ON FINANCIALS_QUARTERLY (METRIC_CATEGORY)
+        """)
+        
         conn.commit()
         conn.close()
-        logger.info("✅ Table created/verified successfully")
+        logger.info("✅ Enhanced table created/verified successfully")
         
     except Exception as e:
         logger.error(f"❌ Error creating table: {e}")
         raise
 
 def insert_quarterly_to_snowflake(conn, stock_code: str, financials: Dict, quarters: List, category: str, industry: str):
-    """Insert quarterly data with batch processing for better performance"""
+    """Insert quarterly data with enhanced categorization"""
     if not financials or not quarters:
         logger.warning(f"No data to insert for {stock_code}")
         return
@@ -412,14 +744,16 @@ def insert_quarterly_to_snowflake(conn, stock_code: str, financials: Dict, quart
         cur = conn.cursor()
         batch_data = []
         
-        # Prepare batch data
+        # Prepare batch data with automatic categorization
         for metric, values in financials.items():
+            metric_category = categorize_metric(metric)
+            
             for i, quarter in enumerate(quarters):
                 value = values[i] if i < len(values) else ""
                 
                 if value:  # Only insert non-empty values
                     batch_data.append((
-                        stock_code, metric, quarter, value, industry, category
+                        stock_code, metric, quarter, value, industry, category, metric_category
                     ))
         
         if not batch_data:
@@ -436,7 +770,8 @@ def insert_quarterly_to_snowflake(conn, stock_code: str, financials: Dict, quart
                     column3 AS QUARTER,
                     column4 AS VALUE,
                     column5 AS INDUSTRY,
-                    column6 AS CATEGORY
+                    column6 AS CATEGORY,
+                    column7 AS METRIC_CATEGORY
                 FROM VALUES %s
             ) AS src
             ON tgt.STOCK_CODE = src.STOCK_CODE 
@@ -447,14 +782,20 @@ def insert_quarterly_to_snowflake(conn, stock_code: str, financials: Dict, quart
                     VALUE = src.VALUE,
                     INDUSTRY = src.INDUSTRY,
                     CATEGORY = src.CATEGORY,
+                    METRIC_CATEGORY = src.METRIC_CATEGORY,
                     UPDATED_AT = CURRENT_TIMESTAMP()
             WHEN NOT MATCHED THEN 
-                INSERT (STOCK_CODE, METRIC, QUARTER, VALUE, INDUSTRY, CATEGORY)
-                VALUES (src.STOCK_CODE, src.METRIC, src.QUARTER, src.VALUE, src.INDUSTRY, src.CATEGORY)
+                INSERT (STOCK_CODE, METRIC, QUARTER, VALUE, INDUSTRY, CATEGORY, METRIC_CATEGORY)
+                VALUES (src.STOCK_CODE, src.METRIC, src.QUARTER, src.VALUE, src.INDUSTRY, src.CATEGORY, src.METRIC_CATEGORY)
         """
         
-        # Format data for VALUES clause
-        values_str = ",".join([f"('{d[0]}', '{d[1]}', '{d[2]}', '{d[3]}', '{d[4]}', '{d[5]}')" for d in batch_data])
+        # Format data for VALUES clause with proper escaping
+        values_list = []
+        for d in batch_data:
+            escaped_values = [str(val).replace("'", "''") for val in d]
+            values_list.append(f"('{escaped_values[0]}', '{escaped_values[1]}', '{escaped_values[2]}', '{escaped_values[3]}', '{escaped_values[4]}', '{escaped_values[5]}', '{escaped_values[6]}')")
+        
+        values_str = ",".join(values_list)
         final_query = merge_query % values_str
         
         cur.execute(final_query)
@@ -467,17 +808,72 @@ def insert_quarterly_to_snowflake(conn, stock_code: str, financials: Dict, quart
         conn.rollback()
         raise
 
+# ------------------- Additional Analytics Routes -------------------
+@app.route("/metrics-summary")
+def metrics_summary():
+    """Show summary of all discovered metrics by category"""
+    try:
+        conn = snowflake_connect()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT METRIC_CATEGORY, COUNT(DISTINCT METRIC) as METRIC_COUNT,
+                   COUNT(DISTINCT STOCK_CODE) as STOCK_COUNT
+            FROM FINANCIALS_QUARTERLY
+            GROUP BY METRIC_CATEGORY
+            ORDER BY METRIC_COUNT DESC
+        """)
+        
+        summary_data = cur.fetchall()
+        conn.close()
+        
+        return render_template("metrics_summary.html", summary_data=summary_data)
+        
+    except Exception as e:
+        logger.error(f"Error in metrics summary: {e}")
+        return f"<h2>Error loading metrics summary</h2>"
+
+@app.route("/api/metrics/<category>")
+def api_metrics_by_category(category):
+    """API endpoint to get metrics by category"""
+    try:
+        conn = snowflake_connect()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT DISTINCT METRIC
+            FROM FINANCIALS_QUARTERLY
+            WHERE METRIC_CATEGORY = %s
+            ORDER BY METRIC
+        """, (category,))
+        
+        metrics = [row[0] for row in cur.fetchall()]
+        conn.close()
+        
+        return json.dumps({"category": category, "metrics": metrics})
+        
+    except Exception as e:
+        logger.error(f"Error in API metrics by category: {e}")
+        return json.dumps({"error": str(e)})
+
 # ------------------- Main -------------------
 if __name__ == '__main__':
     import argparse
     
-    parser = argparse.ArgumentParser(description='Stock Recommender Application')
+    parser = argparse.ArgumentParser(description='Enhanced Stock Recommender Application')
     parser.add_argument('--load-data', action='store_true', help='Load all stock data')
     parser.add_argument('--run-app', action='store_true', help='Run Flask application')
+    parser.add_argument('--test-single', type=str, help='Test scraping for a single stock')
     
     args = parser.parse_args()
     
-    if args.load_data:
+    if args.test_single:
+        # Test scraping for a single stock
+        data, quarters, category, industry = get_financial_data(args.test_single)
+        print(f"Found {len(data)} metrics for {args.test_single}")
+        for metric in sorted(data.keys()):
+            print(f"  - {metric}: {categorize_metric(metric)}")
+    elif args.load_data:
         load_all_data()
     elif args.run_app:
         app.run(debug=True, host='0.0.0.0', port=5000)
