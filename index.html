@@ -1,199 +1,32 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>South Indian Delights</title>
-  <link rel="stylesheet" href="styles.css" />
-  <style>
-    .cart {
-      background-color: white;
-      color: black;
-      padding: 1rem;
-      border-radius: 10px;
-      position: fixed;
-      top: 60px;
-      right: 0;
-      width: 300px;
-      height: 100vh;
-      box-shadow: -2px 0 5px rgba(0,0,0,0.3);
-      transform: translateX(100%);
-      transition: transform 0.3s ease-in-out;
-      z-index: 999;
-      overflow-y: auto;
-    }
-    .cart.show {
-      transform: translateX(0);
-    }
-    .food-card input {
-      width: 50px;
-      margin-right: 10px;
-    }
-    .food-card button, .cart button {
-      padding: 5px 10px;
-      cursor: pointer;
-    }
-    #view-cart {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 5px;
-      z-index: 1000;
-    }
-  </style>
-</head>
-<body>
-  <button id="view-cart" onclick="toggleCart()">View Cart</button>
+<form method="POST" action="/visualize">
+  <label>Select Category:</label>
+  <select id="category" onchange="updateStocks()">
+    {% for cat, stocks in categories.items() %}
+      <option value="{{ cat }}">{{ cat }}</option>
+    {% endfor %}
+  </select>
 
-  <header>
-    <h1>Cucina della Nonna By Shenoy's</h1>
-    <p>Authentic Tastes of the South, Served Fresh</p>
-  </header>
+  <label>Select Stock:</label>
+  <select name="stock" id="stock">
+    {% for stock in categories['Large Cap'] %}
+      <option value="{{ stock }}">{{ stock }}</option>
+    {% endfor %}
+  </select>
 
-  <main>
-    <section class="food-grid" id="menu">
-      <!-- Food Items with Price and Cart -->
-    </section>
-
-    <section class="cart" id="cart">
-      <h2>Cart</h2>
-      <div id="cart-items"></div>
-      <p><strong>Total: ₹<span id="total">0</span></strong></p>
-      <button onclick="checkout()">Checkout</button>
-    </section>
-  </main>
-
-  <footer>
-    <p>Images from Unsplash and Pexels | Site by Nishant</p>
-  </footer>
+  <button type="submit">View</button>
 
   <script>
-    const menuItems = [
-      { id: 'masala-dosa', name: 'Masala Dosa', price: 50 },
-      { id: 'idli', name: 'Idli', price: 50 },
-      { id: 'vada', name: 'Vada', price: 50 },
-      { id: 'appam', name: 'Appam', price: 50 },
-      { id: 'pesarattu', name: 'Pesarattu', price: 50 },
-      { id: 'biryani', name: 'Hyderabadi Biryani', price: 50 },
-    ];
-
-    let cart = JSON.parse(localStorage.getItem('cart')) || {};
-
-    function addToCart(id) {
-      const qtyInput = document.getElementById(`qty-${id}`);
-      const quantity = parseInt(qtyInput.value);
-      const item = menuItems.find(m => m.id === id);
-      if (cart[id]) {
-        cart[id].quantity += quantity;
-      } else {
-        cart[id] = { name: item.name, price: item.price, quantity };
-      }
-      saveCart();
-      updateCart();
-    }
-
-    function removeFromCart(id) {
-      delete cart[id];
-      saveCart();
-      updateCart();
-    }
-
-    function increaseQuantity(id) {
-      cart[id].quantity++;
-      saveCart();
-      updateCart();
-    }
-
-    function decreaseQuantity(id) {
-      if (cart[id].quantity > 1) {
-        cart[id].quantity--;
-        saveCart();
-        updateCart();
-      }
-    }
-
-    function toggleCart() {
-      document.getElementById('cart').classList.toggle('show');
-    }
-
-    function saveCart() {
-      localStorage.setItem('cart', JSON.stringify(cart));
-    }
-
-    function updateCart() {
-      const cartItemsDiv = document.getElementById('cart-items');
-      const totalDisplay = document.getElementById('total');
-      cartItemsDiv.innerHTML = '';
-      let total = 0;
-      for (const id in cart) {
-        const { name, price, quantity } = cart[id];
-        total += price * quantity;
-        cartItemsDiv.innerHTML += `
-          <div>
-            <p>${name} x ${quantity} = ₹${price * quantity}</p>
-            <button onclick="decreaseQuantity('${id}')">-</button>
-            <button onclick="increaseQuantity('${id}')">+</button>
-            <button onclick="removeFromCart('${id}')">Remove</button>
-          </div>
-        `;
-      }
-      totalDisplay.textContent = total;
-    }
-
-    function checkout() {
-      if (Object.keys(cart).length === 0) {
-        alert('Your cart is empty!');
-        return;
-      }
-      saveCart();
-      window.location.href = 'thankyou.html';
-    }
-
-    function renderMenu() {
-      const menuSection = document.getElementById('menu');
-      const descriptions = {
-        'masala-dosa': 'A crispy rice crepe filled with spiced potato mash. Served with chutney and sambar.',
-        'idli': 'Steamed rice cakes, soft and fluffy, typically eaten with sambar and coconut chutney.',
-        'vada': 'Savory deep-fried lentil doughnuts, crispy outside and soft inside.',
-        'appam': 'Soft-centered hoppers with crispy edges, typically served with coconut milk or stew.',
-        'pesarattu': 'Green gram-based dosa, often eaten with ginger chutney.',
-        'biryani': 'Fragrant rice layered with marinated meat and spices, cooked using dum method.'
-      };
-      const origins = {
-        'masala-dosa': 'Karnataka', 'idli': 'Tamil Nadu', 'vada': 'Tamil Nadu',
-        'appam': 'Kerala', 'pesarattu': 'Andhra Pradesh', 'biryani': 'Telangana'
-      };
-      const places = {
-        'masala-dosa': 'Vidyarthi Bhavan, CTR (Malleshwaram), MTR',
-        'idli': "Brahmin's Coffee Bar, Veena Stores",
-        'vada': 'SLV Corner, New Krishna Bhavan',
-        'appam': 'Kerala Pavilion, Kumarakom Restaurant',
-        'pesarattu': 'Chutneys Restaurant, Simply South',
-        'biryani': 'Meghana Foods, Paradise Biryani'
-      };
-      menuItems.forEach(item => {
-        menuSection.innerHTML += `
-          <div class="food-card">
-            <img src="images/${item.id}.jpg" alt="${item.name}" />
-            <h2>${item.name}</h2>
-            <p><strong>Origin:</strong> ${origins[item.id]}</p>
-            <p>${descriptions[item.id]}</p>
-            <p><strong>Price:</strong> ₹${item.price}</p>
-            <p><strong>Best Places:</strong> ${places[item.id]}</p>
-            <input id="qty-${item.id}" type="number" value="1" min="1" />
-            <button onclick="addToCart('${item.id}')">Add to Cart</button>
-          </div>
-        `;
+    const allStocks = {{ categories | tojson }};
+    function updateStocks() {
+      const cat = document.getElementById("category").value;
+      const stockList = document.getElementById("stock");
+      stockList.innerHTML = "";
+      allStocks[cat].forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s;
+        opt.text = s;
+        stockList.appendChild(opt);
       });
     }
-
-    renderMenu();
-    updateCart();
   </script>
-</body>
-</html>
-  
+</form>
