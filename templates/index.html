@@ -203,6 +203,56 @@
                 </div>
             </div>
         </div>
+
+        <!-- Debug Section -->
+        <div class="row justify-content-center mt-4">
+            <div class="col-lg-10">
+                <div class="feature-card">
+                    <h4><i class="fas fa-tools"></i> Debug & Testing Tools</h4>
+                    <div class="row mt-3">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-vial"></i> Test Scraper</h6>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="testStock" placeholder="Stock code">
+                                        <button class="btn btn-primary" onclick="testScraper()">
+                                            <i class="fas fa-bug"></i> Test
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-download"></i> Load Single Stock</h6>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="loadStock" placeholder="Stock code">
+                                        <button class="btn btn-success" onclick="loadSingleStock()">
+                                            <i class="fas fa-plus"></i> Load
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6><i class="fas fa-database"></i> Debug Data</h6>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="debugStock" placeholder="Stock code">
+                                        <button class="btn btn-warning" onclick="debugData()">
+                                            <i class="fas fa-search"></i> Debug
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Loading Modal -->
@@ -312,6 +362,59 @@
         function showAPI() {
             const modal = new bootstrap.Modal(document.getElementById('apiModal'));
             modal.show();
+        }
+
+        // Debug functions
+        function testScraper() {
+            const stock = document.getElementById('testStock').value;
+            if (!stock) {
+                alert('Please enter a stock code');
+                return;
+            }
+            window.open(`/test-scraper/${stock}`, '_blank');
+        }
+
+        function loadSingleStock() {
+            const stock = document.getElementById('loadStock').value;
+            if (!stock) {
+                alert('Please enter a stock code');
+                return;
+            }
+            
+            if (confirm(`Load data for ${stock}? This may take a few minutes.`)) {
+                const modal = new bootstrap.Modal(document.getElementById('loadingModal'));
+                modal.show();
+                
+                fetch(`/load-single/${stock}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    modal.hide();
+                    if (data.status === 'success') {
+                        alert(`Success! Loaded ${data.metrics_count} metrics for ${stock}`);
+                    } else {
+                        alert(`Error: ${data.message}`);
+                    }
+                })
+                .catch(error => {
+                    modal.hide();
+                    console.error('Error:', error);
+                    alert('Error loading data: ' + error);
+                });
+            }
+        }
+
+        function debugData() {
+            const stock = document.getElementById('debugStock').value;
+            if (!stock) {
+                alert('Please enter a stock code');
+                return;
+            }
+            window.open(`/debug/${stock}`, '_blank');
         }
 
         // Add some animation on load
