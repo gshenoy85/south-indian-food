@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ stock }} Financial Visualization</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+      background: #f9f9f9;
+    }
+    h2 {
+      margin-bottom: 20px;
+    }
+    .flex-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 25px;
+    }
+    select, label, button {
+      font-size: 14px;
+    }
+    select[multiple] {
+      min-width: 280px;
+      max-height: 300px;
+      padding: 10px;
+      overflow-y: auto;
+    }
+    button {
+      padding: 8px 12px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>📊 Cross-Metric Visualization for {{ stock }}</h2>
+
+  <div class="flex-row">
+    <div>
+      <label><strong>Select Metrics:</strong></label><br />
+      <select id="metricSelect" multiple size="10">
+        {% for category, metrics in metric_categories.items() %}
+          <optgroup label="{{ category }}">
+            {% for metric in metrics %}
+              {% if metric in financial_data %}
+                <option value="{{ metric }}">{{ metric }}</option>
+              {% endif %}
+            {% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label><strong>Chart Type:</strong></label><br />
+      <select id="chartType">
+        <option value="line">Line</option>
+        <option value="bar">Bar</option>
+        <option value="area">Area</option>
+      </select>
+    </div>
+
+    <div>
+      <label><strong>Quarter Range:</strong></label><br />
+      <select id="startQuarter"></select> to <select id="endQuarter"></select>
+    </div>
+
+    <div>
+      <label><strong>Export:</strong></label><br />
+      <button onclick="downloadCSV()">⬇ Download CSV</button>
+    </div>
+  </div>
+
+  <div id="graph"></div>
+
+  <script>
+    const data = JSON.parse('{{ financial_data | safe }}');
+    const years = {{ years | tojson }};
+    const metricSelect = document.getElementById('metricSelect');
+    const chartType = document.getElementById('chartType');
+    const startYear = document.getElementById('startYear');
+    const endYear = document.getElementById('endYear');
+    const graphDiv = document.getElementById('graph');
+
+    // Populate year dropdowns
+    years.forEach((year, i) => {
+      let opt1 = new Option(year, i);
+      let opt2 = new Option(year, i);
+      startYear.add(opt1);
+      endYear.add(opt2);
+    });
+    startYear.value = 0;
+    endYear.value = years.length - 1;
+
+    function getSelectedMetrics() {
+      const options = metricSelect.options;
+      const selected = [];
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].selected && !options[i].disabled) {
+          selected.push(options[i].value);
+        }
+      }
+      return selected;
+    }
+
+    function getYearIndices() {
+      let start = parseInt(startYear.value);
+      let end = parseInt(endYear.value);
+      return [start, end].sort((a, b) => a - b);
+    }
+
+    function drawGraph() {
+      const selectedMetrics = getSelectedMetrics();
+      const [startIdx, endIdx] = getYearIndices();
+      const selectedYears = years.slice(startIdx, endIdx + 1);
+      const type = chartType.value;
+      const traces = [];
+
+      selectedMetrics.forEach(metric => {
+        const y = data[metric].slice(startIdx, endIdx + 1);
+        const trace = {
+          x: selectedYears,
+          y: y,
+          name: metric,
+          mode: type === 'line' ? 'lines+markers' : undefined,
+          type: type === 'area' ? 'scatter' : type,
+          fill: type === 'area' ? 'tozeroy' : undefined
+        };
+        traces.push(trace);
+      });
+
+      Plotly.newPlot(graphDiv, traces, {
+        title: selectedMetrics.join(" vs "),
+        xaxis: { title: "Year" },
+        yaxis: {
+                title: "Value",
+                tickformat: ".0%" // shows 0.456 as "46%"
+              },
+        plot_bgcolor: "#ffffff",
+        paper_bgcolor: "#ffffff"
+      });
+    }
+
+    function downloadCSV() {
+      const selectedMetrics = getSelectedMetrics();
+      const [startIdx, endIdx] = getYearIndices();
+      const selectedYears = years.slice(startIdx, endIdx + 1);
+      let csv = "Metric," + selectedYears.join(",") + "\n";
+
+      selectedMetrics.forEach(metric => {
+        const values = data[metric].slice(startIdx, endIdx + 1);
+        csv += `${metric},${values.join(",")}\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "{{ stock }}_financials.csv";
+      link.click();
+    }
+
+    // Event listeners
+    metricSelect.addEventListener('change', drawGraph);
+    chartType.addEventListener('change', drawGraph);
+    startYear.addEventListener('change', drawGraph);
+    endYear.addEventListener('change', drawGraph);
+
+    // Initial draw
+    drawGraph();
+  </script>
+
+</body>
+</html>
