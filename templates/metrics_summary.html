@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Metrics Summary - Stock Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            padding: 2rem 0;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .header-section {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #333;
+        }
+        .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .summary-card {
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            transition: transform 0.3s ease;
+        }
+        .summary-card:hover {
+            transform: translateY(-5px);
+        }
+        .summary-value {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        .summary-label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        .category-card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .category-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+        .category-header {
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 1.5rem;
+            font-weight: 600;
+            font-size: 1.3rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .category-body {
+            padding: 1.5rem;
+        }
+        .metric-badge {
+            display: inline-block;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            margin: 0.25rem;
+            font-size: 0.9rem;
+            color: #495057;
+            transition: all 0.3s ease;
+        }
+        .metric-badge:hover {
+            background: #e9ecef;
+            transform: scale(1.05);
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-item {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+            color: white;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            display: block;
+        }
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .search-box {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .form-control {
+            border-radius: 10px;
+            border: none;
+            padding: 0.75rem 1rem;
+        }
+        .btn-outline-light {
+            border-radius: 20px;
+        }
+        .icon-large {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: rgba(255,255,255,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid main-container">
+        <!-- Header Section -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="header-section">
+                    <h1 class="title">
+                        <i class="fas fa-database"></i> Financial Metrics Summary
+                    </h1>
+                    <p class="lead">Comprehensive Overview of All Discovered Financial Metrics</p>
+                    <div class="d-flex justify-content-center gap-3 mt-3">
+                        <a href="/" class="btn btn-outline-primary">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                        <button class="btn btn-outline-success" onclick="exportMetrics()">
+                            <i class="fas fa-download"></i> Export Summary
+                        </button>
+                        <button class="btn btn-outline-info" onclick="showDistribution()">
+                            <i class="fas fa-chart-pie"></i> View Distribution
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overall Statistics -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <i class="fas fa-calculator icon-large"></i>
+                        <span class="stat-value">{{ summary_data|length }}</span>
+                        <span class="stat-label">Metric Categories</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-chart-bar icon-large"></i>
+                        <span class="stat-value">{{ summary_data|sum(attribute=1) if summary_data else 0 }}</span>
+                        <span class="stat-label">Total Metrics</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-building icon-large"></i>
+                        <span class="stat-value">{{ summary_data|sum(attribute=2) if summary_data else 0 }}</span>
+                        <span class="stat-label">Analyzed Stocks</span>
+                    </div>
+                    <div class="stat-item">
+                        <i class="fas fa-clock icon-large"></i>
+                        <span class="stat-value">Live</span>
+                        <span class="stat-label">Data Status</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search and Filter -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="search-box">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <label class="form-label text-white">
+                                <i class="fas fa-search"></i> Search Metrics:
+                            </label>
+                            <input type="text" class="form-control" id="metric-search" 
+                                   placeholder="Search for specific metrics...">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label text-white">
+                                <i class="fas fa-filter"></i> Filter by Category:
+                            </label>
+                            <select class="form-select" id="category-filter">
+                                <option value="">All Categories</option>
+                                {% for category_data in summary_data %}
+                                <option value="{{ category_data[0] }}">{{ category_data[0] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category Breakdown -->
+        <div class="row justify-content-center">
+            <div class="col-lg-5">
+                <div class="chart-container">
+                    <h5 class="text-center mb-4">
+                        <i class="fas fa-chart-pie"></i> Metrics Distribution by Category
+                    </h5>
+                    <div style="position: relative; height: 400px;">
+                        <canvas id="distribution-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="chart-container">
+                    <h5 class="text-center mb-4">
+                        <i class="fas fa-chart-bar"></i> Stock Coverage by Category
+                    </h5>
+                    <div style="position: relative; height: 400px;">
+                        <canvas id="coverage-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Category Cards -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <h3 class="text-white text-center mb-4">
+                    <i class="fas fa-list"></i> Detailed Category Breakdown
+                </h3>
+                
+                {% for category_data in summary_data %}
+                <div class="category-card" data-category="{{ category_data[0] }}">
+                    <div class="category-header">
+                        <div>
+                            {% if category_data[0] == "Income Statement" %}
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            {% elif category_data[0] == "Balance Sheet" %}
+                                <i class="fas fa-balance-scale"></i>
+                            {% elif category_data[0] == "Cash Flow" %}
+                                <i class="fas fa-coins"></i>
+                            {% elif category_data[0] == "Financial Ratios" %}
+                                <i class="fas fa-calculator"></i>
+                            {% elif category_data[0] == "Per Share Data" %}
+                                <i class="fas fa-share-alt"></i>
+                            {% elif category_data[0] == "Valuation Metrics" %}
+                                <i class="fas fa-tag"></i>
+                            {% else %}
+                                <i class="fas fa-chart-pie"></i>
+                            {% endif %}
+                            {{ category_data[0] }}
+                        </div>
+                        <div>
+                            <span class="badge bg-light text-dark me-2">{{ category_data[1] }} metrics</span>
+                            <span class="badge bg-light text-dark">{{ category_data[2] }} stocks</span>
+                        </div>
+                    </div>
+                    <div class="category-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-chart-line text-primary me-2"></i>
+                                    <span class="fw-bold">{{ category_data[1] }}</span>
+                                    <small class="text-muted ms-1">Unique Metrics</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-building text-success me-2"></i>
+                                    <span class="fw-bold">{{ category_data[2] }}</span>
+                                    <small class="text-muted ms-1">Stocks Covered</small>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-percentage text-info me-2"></i>
+                                    <span class="fw-bold">{{ "%.1f"|format((category_data[1] / summary_data|sum(attribute=1) * 100) if summary_data|sum(attribute=1) > 0 else 0) }}%</span>
+                                    <small class="text-muted ms-1">of Total</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6 class="mb-3">Available Actions:</h6>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn btn-outline-primary btn-sm" onclick="viewCategoryDetails('{{ category_data[0] }}')">
+                                    <i class="fas fa-eye"></i> View Details
+                                </button>
+                                <button class="btn btn-outline-success btn-sm" onclick="exportCategory('{{ category_data[0] }}')">
+                                    <i class="fas fa-download"></i> Export
+                                </button>
+                                <a href="/api/metrics/{{ category_data[0]|urlencode }}" class="btn btn-outline-info btn-sm" target="_blank">
+                                    <i class="fas fa-code"></i> API
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Summary Statistics -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="row">
+                    {% set total_metrics = summary_data|sum(attribute=1) if summary_data else 0 %}
+                    {% for category_data in summary_data %}
+                    <div class="col-lg-3 col-md-6">
+                        <div class="summary-card">
+                            <div class="summary-value">{{ category_data[1] }}</div>
+                            <div class="summary-label">{{ category_data[0] }}</div>
+                            <div class="mt-2">
+                                <small>{{ "%.1f"|format((category_data[1] / total_metrics * 100) if total_metrics > 0 else 0) }}% of total</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Details Modal -->
+    <div class="modal fade" id="categoryModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">
+                        <i class="fas fa-list"></i> Category Details
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Summary data from Python
+        const summaryData = {{ summary_data|tojson }};
+
+        // Chart colors
+        const chartColors = [
+            '#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe',
+            '#43e97b', '#38f9d7', '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3'
+        ];
+
+        function createDistributionChart() {
+            const ctx = document.getElementById('distribution-chart').getContext('2d');
+            const labels = summaryData.map(item => item[0]);
+            const data = summaryData.map(item => item[1]);
+
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: chartColors.slice(0, data.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const total = data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((context.raw / total) * 100).toFixed(1);
+                                    return `${context.label}: ${context.raw} metrics (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function createCoverageChart() {
+            const ctx = document.getElementById('coverage-chart').getContext('2d');
+            const labels = summaryData.map(item => item[0]);
+            const data = summaryData.map(item => item[2]);
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Stocks Covered',
+                        data: data,
+                        backgroundColor: chartColors.slice(0, data.length).map(color => color + '80'),
+                        borderColor: chartColors.slice(0, data.length),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function filterByCategory() {
+            const selectedCategory = document.getElementById('category-filter').value;
+            const categoryCards = document.querySelectorAll('.category-card');
+
+            categoryCards.forEach(card => {
+                const category = card.getAttribute('data-category');
+                if (!selectedCategory || category === selectedCategory) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function searchMetrics() {
+            const searchTerm = document.getElementById('metric-search').value.toLowerCase();
+            const categoryCards = document.querySelectorAll('.category-card');
+
+            categoryCards.forEach(card => {
+                const category = card.getAttribute('data-category').toLowerCase();
+                if (!searchTerm || category.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function viewCategoryDetails(category) {
+            document.getElementById('modalTitle').innerHTML = `<i class="fas fa-list"></i> ${category} - Detailed Metrics`;
+            
+            // Load category metrics via API
+            fetch(`/api/metrics/${encodeURIComponent(category)}`)
+                .then(response => response.json())
+                .then(data => {
+                    let content = '<div class="row">';
+                    if (data.metrics && data.metrics.length > 0) {
+                        data.metrics.forEach((metric, index) => {
+                            content += `
+                                <div class="col-md-4 mb-2">
+                                    <span class="metric-badge">${metric}</span>
+                                </div>
+                            `;
+                        });
+                    } else {
+                        content += '<div class="col-12 text-center"><p>No metrics found for this category.</p></div>';
+                    }
+                    content += '</div>';
+                    document.getElementById('modalBody').innerHTML = content;
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('categoryModal'));
+                    modal.show();
+                })
+                .catch(error => {
+                    console.error('Error loading category details:', error);
+                    document.getElementById('modalBody').innerHTML = '<div class="alert alert-danger">Error loading category details.</div>';
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('categoryModal'));
+                    modal.show();
+                });
+        }
+
+        function exportCategory(category) {
+            // Create CSV export for specific category
+            const csv = `Category,Metric Count,Stock Count\n"${category}",${
+                summaryData.find(item => item[0] === category)[1]
+            },${summaryData.find(item => item[0] === category)[2]}`;
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${category.replace(/\s+/g, '_')}_metrics_summary.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function exportMetrics() {
+            // Create comprehensive CSV export
+            let csv = 'Category,Metric Count,Stock Count,Percentage of Total\n';
+            const totalMetrics = summaryData.reduce((sum, item) => sum + item[1], 0);
+            
+            summaryData.forEach(item => {
+                const percentage = ((item[1] / totalMetrics) * 100).toFixed(1);
+                csv += `"${item[0]}",${item[1]},${item[2]},${percentage}%\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'financial_metrics_summary.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function showDistribution() {
+            // Scroll to the distribution charts
+            document.querySelector('#distribution-chart').scrollIntoView({ 
+                behavior: 'smooth' 
+            });
+        }
+
+        // Initialize everything when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            createDistributionChart();
+            createCoverageChart();
+
+            // Add event listeners
+            document.getElementById('category-filter').addEventListener('change', filterByCategory);
+            document.getElementById('metric-search').addEventListener('input', searchMetrics);
+
+            // Add animation on scroll
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: '0px 0px -100px 0px'
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }
+                });
+            }, observerOptions);
+
+            document.querySelectorAll('.category-card, .summary-card').forEach(card => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                observer.observe(card);
+            });
+        });
+    </script>
+</body>
+</html>

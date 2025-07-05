@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ stock }} - Quarterly Financial Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            padding: 2rem 0;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .category-header {
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 15px 15px 0 0;
+            font-weight: 600;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-section {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #333;
+        }
+        .stock-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .metric-table {
+            font-size: 0.9rem;
+        }
+        .metric-table th {
+            background: #f8f9fa;
+            border: none;
+            font-weight: 600;
+            padding: 1rem 0.75rem;
+        }
+        .metric-table td {
+            border: none;
+            padding: 0.75rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .metric-table tr:hover {
+            background: #f8f9fa;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 1rem 0;
+        }
+        .nav-pills .nav-link {
+            border-radius: 20px;
+            margin: 0 0.25rem;
+        }
+        .nav-pills .nav-link.active {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+        }
+        .category-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+        }
+        .positive { color: #28a745; font-weight: 600; }
+        .negative { color: #dc3545; font-weight: 600; }
+        .neutral { color: #6c757d; }
+        .metric-name {
+            font-weight: 500;
+            color: #495057;
+        }
+        .tab-content {
+            background: white;
+            border-radius: 0 0 15px 15px;
+            padding: 0;
+        }
+        .collapse-button {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1rem;
+        }
+        .collapse-button:hover {
+            color: rgba(255,255,255,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid main-container">
+        <!-- Header Section -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="header-section">
+                    <h1 class="stock-title">
+                        <i class="fas fa-building"></i> {{ stock }}
+                    </h1>
+                    <p class="lead">Quarterly Financial Analysis - {{ quarters|length }} Quarters Available</p>
+                    <div class="d-flex justify-content-center gap-3 mt-3">
+                        <a href="/" class="btn btn-outline-primary">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                        <button class="btn btn-outline-success" onclick="downloadData()">
+                            <i class="fas fa-download"></i> Export Data
+                        </button>
+                        <button class="btn btn-outline-info" onclick="showAllCharts()">
+                            <i class="fas fa-chart-line"></i> View All Charts
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metric Categories -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                {% for category, metrics in metric_categories.items() %}
+                <div class="card">
+                    <div class="category-header" data-bs-toggle="collapse" data-bs-target="#category-{{ loop.index }}" style="cursor: pointer;">
+                        <div>
+                            {% if category == "Income Statement" %}
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            {% elif category == "Balance Sheet" %}
+                                <i class="fas fa-balance-scale"></i>
+                            {% elif category == "Cash Flow" %}
+                                <i class="fas fa-coins"></i>
+                            {% elif category == "Financial Ratios" %}
+                                <i class="fas fa-calculator"></i>
+                            {% elif category == "Per Share Data" %}
+                                <i class="fas fa-share-alt"></i>
+                            {% elif category == "Valuation Metrics" %}
+                                <i class="fas fa-tag"></i>
+                            {% else %}
+                                <i class="fas fa-chart-pie"></i>
+                            {% endif %}
+                            {{ category }}
+                            <span class="category-badge">{{ metrics|length }} metrics</span>
+                        </div>
+                        <button class="collapse-button" type="button">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="collapse show" id="category-{{ loop.index }}">
+                        <div class="card-body p-0">
+                            <!-- Navigation tabs for Table/Chart views -->
+                            <ul class="nav nav-pills nav-fill m-3" id="nav-{{ loop.index }}" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="table-tab-{{ loop.index }}" data-bs-toggle="pill" 
+                                            data-bs-target="#table-{{ loop.index }}" type="button" role="tab">
+                                        <i class="fas fa-table"></i> Data Table
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="chart-tab-{{ loop.index }}" data-bs-toggle="pill" 
+                                            data-bs-target="#chart-{{ loop.index }}" type="button" role="tab">
+                                        <i class="fas fa-chart-line"></i> Trend Charts
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content" id="tabContent-{{ loop.index }}">
+                                <!-- Table View -->
+                                <div class="tab-pane fade show active" id="table-{{ loop.index }}" role="tabpanel">
+                                    <div class="table-responsive">
+                                        <table class="table metric-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Metric</th>
+                                                    {% for quarter in quarters %}
+                                                    <th class="text-center">{{ quarter }}</th>
+                                                    {% endfor %}
+                                                    <th class="text-center">Trend</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for metric, values in metrics.items() %}
+                                                <tr>
+                                                    <td class="metric-name">{{ metric }}</td>
+                                                    {% for value in values %}
+                                                    <td class="text-center">
+                                                        {% if value %}
+                                                            {% if value|float > 0 %}
+                                                                <span class="positive">{{ value }}</span>
+                                                            {% elif value|float < 0 %}
+                                                                <span class="negative">{{ value }}</span>
+                                                            {% else %}
+                                                                <span class="neutral">{{ value }}</span>
+                                                            {% endif %}
+                                                        {% else %}
+                                                            <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    {% endfor %}
+                                                    <td class="text-center">
+                                                        {% set first_val = values[0]|float if values[0] else 0 %}
+                                                        {% set last_val = values[-1]|float if values[-1] else 0 %}
+                                                        {% if last_val > first_val %}
+                                                            <i class="fas fa-arrow-up text-success"></i>
+                                                        {% elif last_val < first_val %}
+                                                            <i class="fas fa-arrow-down text-danger"></i>
+                                                        {% else %}
+                                                            <i class="fas fa-arrow-right text-muted"></i>
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Chart View -->
+                                <div class="tab-pane fade" id="chart-{{ loop.index }}" role="tabpanel">
+                                    <div class="p-3">
+                                        <div class="row">
+                                            {% for metric, values in metrics.items() %}
+                                            {% if loop.index <= 6 %} <!-- Limit to 6 charts per category -->
+                                            <div class="col-md-6 mb-3">
+                                                <div class="chart-container">
+                                                    <canvas id="chart-{{ category|replace(' ', '-') }}-{{ loop.index }}"></canvas>
+                                                </div>
+                                                <h6 class="text-center mt-2">{{ metric }}</h6>
+                                            </div>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Financial data from Python
+        const financialData = {{ financial_data|safe }};
+        const quarters = {{ quarters|tojson }};
+        const stock = "{{ stock }}";
+
+        // Chart colors
+        const chartColors = [
+            '#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe',
+            '#43e97b', '#38f9d7', '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3'
+        ];
+
+        function createChart(canvasId, metricName, data, category) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+
+            // Filter out empty values and corresponding quarters
+            const filteredData = [];
+            const filteredQuarters = [];
+            
+            data.forEach((value, index) => {
+                if (value !== "" && value !== null && value !== undefined) {
+                    filteredData.push(parseFloat(value));
+                    filteredQuarters.push(quarters[index]);
+                }
+            });
+
+            if (filteredData.length === 0) return;
+
+            const colorIndex = Math.abs(metricName.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % chartColors.length;
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: filteredQuarters,
+                    datasets: [{
+                        label: metricName,
+                        data: filteredData,
+                        borderColor: chartColors[colorIndex],
+                        backgroundColor: chartColors[colorIndex] + '20',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: chartColors[colorIndex],
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: chartColors[colorIndex],
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxRotation: 45
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    // Format large numbers
+                                    if (Math.abs(value) >= 1000000) {
+                                        return (value / 1000000).toFixed(1) + 'M';
+                                    } else if (Math.abs(value) >= 1000) {
+                                        return (value / 1000).toFixed(1) + 'K';
+                                    }
+                                    return value.toFixed(2);
+                                }
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
+        // Initialize charts when chart tabs are shown
+        document.addEventListener('DOMContentLoaded', function() {
+            // Create charts for each category
+            let chartIndex = 1;
+            Object.keys(financialData).forEach(category => {
+                const metrics = financialData[category];
+                let metricIndex = 1;
+                
+                Object.keys(metrics).forEach(metricName => {
+                    if (metricIndex <= 6) { // Limit to 6 charts per category
+                        const canvasId = `chart-${category.replace(/\s+/g, '-')}-${metricIndex}`;
+                        const metricData = metrics[metricName];
+                        
+                        // Delay chart creation to ensure DOM is ready
+                        setTimeout(() => {
+                            createChart(canvasId, metricName, metricData, category);
+                        }, 100 * metricIndex);
+                        
+                        metricIndex++;
+                    }
+                });
+                chartIndex++;
+            });
+        });
+
+        function downloadData() {
+            // Convert data to CSV format
+            let csv = 'Metric Category,Metric Name,' + quarters.join(',') + '\n';
+            
+            Object.keys(financialData).forEach(category => {
+                const metrics = financialData[category];
+                Object.keys(metrics).forEach(metricName => {
+                    const values = metrics[metricName];
+                    csv += `"${category}","${metricName}",${values.join(',')}\n`;
+                });
+            });
+
+            // Download the CSV
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${stock}_quarterly_data.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function showAllCharts() {
+            // Switch all tabs to chart view
+            document.querySelectorAll('[id^="chart-tab-"]').forEach(tab => {
+                const tabInstance = new bootstrap.Tab(tab);
+                tabInstance.show();
+            });
+        }
+
+        // Update collapse button icons
+        document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(button => {
+            button.addEventListener('click', function() {
+                const icon = this.querySelector('.fa-chevron-down, .fa-chevron-up');
+                setTimeout(() => {
+                    const target = document.querySelector(this.getAttribute('data-bs-target'));
+                    if (target.classList.contains('show')) {
+                        icon.className = 'fas fa-chevron-up';
+                    } else {
+                        icon.className = 'fas fa-chevron-down';
+                    }
+                }, 150);
+            });
+        });
+    </script>
+</body>
+</html>

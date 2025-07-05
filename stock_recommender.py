@@ -833,6 +833,21 @@ def metrics_summary():
         logger.error(f"Error in metrics summary: {e}")
         return f"<h2>Error loading metrics summary</h2>"
 
+@app.route("/load-data", methods=["POST"])
+def load_data_endpoint():
+    """API endpoint to trigger data loading"""
+    try:
+        # This would typically be run in the background
+        import threading
+        thread = threading.Thread(target=load_all_data)
+        thread.start()
+        
+        return json.dumps({"status": "success", "message": "Data loading initiated"})
+        
+    except Exception as e:
+        logger.error(f"Error initiating data load: {e}")
+        return json.dumps({"status": "error", "message": str(e)})
+
 @app.route("/api/metrics/<category>")
 def api_metrics_by_category(category):
     """API endpoint to get metrics by category"""

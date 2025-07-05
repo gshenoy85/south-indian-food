@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ stock }} - Interactive Financial Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            padding: 2rem 0;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .header-section {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #333;
+        }
+        .stock-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #f8f9fa;
+        }
+        .chart-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #495057;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 1rem 0;
+        }
+        .large-chart {
+            height: 500px;
+        }
+        .small-chart {
+            height: 300px;
+        }
+        .control-panel {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            color: white;
+        }
+        .metric-selector {
+            margin-bottom: 1rem;
+        }
+        .metric-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            margin: 0.25rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .metric-badge:hover {
+            background: rgba(255,255,255,0.3);
+            transform: scale(1.05);
+        }
+        .metric-badge.selected {
+            background: #4facfe;
+            color: white;
+        }
+        .summary-cards {
+            margin-bottom: 2rem;
+        }
+        .summary-card {
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .summary-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .summary-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .trend-indicator {
+            font-size: 1.2rem;
+            margin-left: 0.5rem;
+        }
+        .tab-content {
+            background: white;
+            border-radius: 15px;
+            padding: 0;
+        }
+        .nav-pills .nav-link {
+            border-radius: 20px;
+            margin: 0 0.25rem;
+        }
+        .nav-pills .nav-link.active {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+        }
+        .plotly-container {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid main-container">
+        <!-- Header Section -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="header-section">
+                    <h1 class="stock-title">
+                        <i class="fas fa-chart-area"></i> {{ stock }} Financial Visualization
+                    </h1>
+                    <p class="lead">Interactive Analysis Dashboard - {{ years|length }} Periods Available</p>
+                    <div class="d-flex justify-content-center gap-3 mt-3">
+                        <a href="/" class="btn btn-outline-primary">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                        <a href="/quarterly/{{ stock }}" class="btn btn-outline-info">
+                            <i class="fas fa-table"></i> Data Tables
+                        </a>
+                        <button class="btn btn-outline-success" onclick="downloadCharts()">
+                            <i class="fas fa-download"></i> Export Charts
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="showComparison()">
+                            <i class="fas fa-balance-scale"></i> Compare Metrics
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="row summary-cards" id="summary-cards">
+                    <!-- Summary cards will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="control-panel">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-sliders-h"></i> Chart Controls</h5>
+                            <div class="mb-3">
+                                <label class="form-label">Chart Type:</label>
+                                <select class="form-select" id="chart-type-select">
+                                    <option value="line">Line Chart</option>
+                                    <option value="bar">Bar Chart</option>
+                                    <option value="area">Area Chart</option>
+                                    <option value="scatter">Scatter Plot</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Time Period:</label>
+                                <select class="form-select" id="period-select">
+                                    <option value="all">All Periods</option>
+                                    <option value="recent">Last 4 Quarters</option>
+                                    <option value="year">Last Year</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-eye"></i> Metric Visibility</h5>
+                            <div class="metric-selector" id="metric-selector">
+                                <!-- Metric badges will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Tabs -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card">
+                    <div class="card-body">
+                        <ul class="nav nav-pills nav-fill mb-4" id="chart-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="overview-tab" data-bs-toggle="pill" 
+                                        data-bs-target="#overview-content" type="button" role="tab">
+                                    <i class="fas fa-chart-line"></i> Overview
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="performance-tab" data-bs-toggle="pill" 
+                                        data-bs-target="#performance-content" type="button" role="tab">
+                                    <i class="fas fa-trophy"></i> Performance
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="financial-tab" data-bs-toggle="pill" 
+                                        data-bs-target="#financial-content" type="button" role="tab">
+                                    <i class="fas fa-calculator"></i> Financial Health
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="advanced-tab" data-bs-toggle="pill" 
+                                        data-bs-target="#advanced-content" type="button" role="tab">
+                                    <i class="fas fa-cogs"></i> Advanced Analysis
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="chart-tab-content">
+                            <!-- Overview Tab -->
+                            <div class="tab-pane fade show active" id="overview-content" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-lg-8">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Revenue & Profitability Trends</h5>
+                                                <button class="btn btn-outline-secondary btn-sm" onclick="fullscreenChart('main-overview-chart')">
+                                                    <i class="fas fa-expand"></i>
+                                                </button>
+                                            </div>
+                                            <div class="chart-container large-chart" id="main-overview-chart"></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Key Ratios</h5>
+                                            </div>
+                                            <div class="chart-container" id="ratios-chart"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Performance Tab -->
+                            <div class="tab-pane fade" id="performance-content" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">ROE & ROCE Trends</h5>
+                                            </div>
+                                            <div class="chart-container" id="roe-roce-chart"></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Margin Analysis</h5>
+                                            </div>
+                                            <div class="chart-container" id="margins-chart"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Performance Heatmap</h5>
+                                            </div>
+                                            <div class="chart-container" id="performance-heatmap"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Financial Health Tab -->
+                            <div class="tab-pane fade" id="financial-content" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Debt Analysis</h5>
+                                            </div>
+                                            <div class="chart-container" id="debt-chart"></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Liquidity Ratios</h5>
+                                            </div>
+                                            <div class="chart-container" id="liquidity-chart"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Advanced Analysis Tab -->
+                            <div class="tab-pane fade" id="advanced-content" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Correlation Analysis</h5>
+                                            </div>
+                                            <div class="chart-container large-chart" id="correlation-chart"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Growth Analysis</h5>
+                                            </div>
+                                            <div class="chart-container" id="growth-chart"></div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="chart-card">
+                                            <div class="chart-header">
+                                                <h5 class="chart-title">Volatility Analysis</h5>
+                                            </div>
+                                            <div class="chart-container" id="volatility-chart"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div class="modal fade" id="comparisonModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-balance-scale"></i> Metric Comparison
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="chart-container large-chart" id="comparison-chart"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Financial data from Python
+        const financialData = {{ financial_data|safe }};
+        const periods = {{ years|tojson }};
+        const stock = "{{ stock }}";
+
+        let selectedMetrics = new Set();
+        let chartInstances = {};
+
+        // Color schemes
+        const colors = {
+            primary: '#667eea',
+            secondary: '#764ba2',
+            success: '#28a745',
+            danger: '#dc3545',
+            warning: '#ffc107',
+            info: '#17a2b8',
+            gradients: [
+                ['#667eea', '#764ba2'],
+                ['#f093fb', '#f5576c'],
+                ['#4facfe', '#00f2fe'],
+                ['#43e97b', '#38f9d7']
+            ]
+        };
+
+        function initializeSummaryCards() {
+            const summaryContainer = document.getElementById('summary-cards');
+            const summaryMetrics = [
+                { key: 'Revenue', category: 'Income Statement', icon: 'fas fa-chart-line' },
+                { key: 'Net Profit', category: 'Income Statement', icon: 'fas fa-money-bill' },
+                { key: 'ROE', category: 'Financial Ratios', icon: 'fas fa-percentage' },
+                { key: 'Debt to Equity', category: 'Financial Ratios', icon: 'fas fa-balance-scale' }
+            ];
+
+            summaryMetrics.forEach((metric, index) => {
+                const values = getMetricValues(metric.key, metric.category);
+                if (values && values.length > 0) {
+                    const latest = values[values.length - 1];
+                    const previous = values[values.length - 2] || latest;
+                    const trend = latest > previous ? 'up' : latest < previous ? 'down' : 'right';
+                    const trendColor = trend === 'up' ? 'success' : trend === 'down' ? 'danger' : 'muted';
+
+                    summaryContainer.innerHTML += `
+                        <div class="col-lg-3 col-md-6">
+                            <div class="summary-card">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="summary-value">${formatValue(latest)}</div>
+                                        <div class="summary-label">${metric.key}</div>
+                                    </div>
+                                    <div>
+                                        <i class="${metric.icon}" style="font-size: 2rem; opacity: 0.7;"></i>
+                                        <div class="trend-indicator">
+                                            <i class="fas fa-arrow-${trend} text-${trendColor}"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        function initializeMetricSelector() {
+            const selectorContainer = document.getElementById('metric-selector');
+            const allMetrics = [];
+
+            Object.keys(financialData).forEach(category => {
+                Object.keys(financialData[category]).forEach(metric => {
+                    allMetrics.push({ metric, category });
+                });
+            });
+
+            // Show first 10 metrics initially
+            allMetrics.slice(0, 10).forEach(item => {
+                selectedMetrics.add(`${item.category}:${item.metric}`);
+                selectorContainer.innerHTML += `
+                    <span class="metric-badge selected" 
+                          data-metric="${item.metric}" 
+                          data-category="${item.category}"
+                          onclick="toggleMetric('${item.category}', '${item.metric}')">
+                        ${item.metric}
+                    </span>
+                `;
+            });
+
+            // Add remaining metrics as unselected
+            allMetrics.slice(10).forEach(item => {
+                selectorContainer.innerHTML += `
+                    <span class="metric-badge" 
+                          data-metric="${item.metric}" 
+                          data-category="${item.category}"
+                          onclick="toggleMetric('${item.category}', '${item.metric}')">
+                        ${item.metric}
+                    </span>
+                `;
+            });
+        }
+
+        function toggleMetric(category, metric) {
+            const key = `${category}:${metric}`;
+            const badge = document.querySelector(`[data-metric="${metric}"][data-category="${category}"]`);
+            
+            if (selectedMetrics.has(key)) {
+                selectedMetrics.delete(key);
+                badge.classList.remove('selected');
+            } else {
+                selectedMetrics.add(key);
+                badge.classList.add('selected');
+            }
+            
+            updateCharts();
+        }
+
+        function getMetricValues(metricName, category) {
+            if (financialData[category] && financialData[category][metricName]) {
+                return financialData[category][metricName].filter(v => v !== "" && v !== null);
+            }
+            return [];
+        }
+
+        function formatValue(value) {
+            const num = parseFloat(value);
+            if (isNaN(num)) return value;
+            
+            if (Math.abs(num) >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (Math.abs(num) >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toFixed(2);
+        }
+
+        function createOverviewChart() {
+            const traces = [];
+            let colorIndex = 0;
+
+            selectedMetrics.forEach(key => {
+                const [category, metric] = key.split(':');
+                const values = getMetricValues(metric, category);
+                
+                if (values.length > 0) {
+                    traces.push({
+                        x: periods.slice(0, values.length),
+                        y: values.map(v => parseFloat(v)),
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: metric,
+                        line: {
+                            color: colors.gradients[colorIndex % colors.gradients.length][0],
+                            width: 3
+                        },
+                        marker: {
+                            size: 8,
+                            color: colors.gradients[colorIndex % colors.gradients.length][1]
+                        }
+                    });
+                    colorIndex++;
+                }
+            });
+
+            const layout = {
+                title: 'Financial Metrics Trend Analysis',
+                xaxis: { title: 'Time Period' },
+                yaxis: { title: 'Value' },
+                hovermode: 'x unified',
+                showlegend: true,
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            };
+
+            Plotly.newPlot('main-overview-chart', traces, layout, {responsive: true});
+        }
+
+        function createRatiosChart() {
+            const ratioMetrics = ['ROE', 'ROCE', 'Current Ratio', 'Debt to Equity'];
+            const values = [];
+            const labels = [];
+
+            ratioMetrics.forEach(metric => {
+                const metricValues = getMetricValues(metric, 'Financial Ratios');
+                if (metricValues.length > 0) {
+                    values.push(parseFloat(metricValues[metricValues.length - 1]));
+                    labels.push(metric);
+                }
+            });
+
+            const data = [{
+                type: 'bar',
+                x: labels,
+                y: values,
+                marker: {
+                    color: colors.gradients[0].map((c, i) => `rgba(${hexToRgb(c).r}, ${hexToRgb(c).g}, ${hexToRgb(c).b}, 0.8)`)
+                }
+            }];
+
+            const layout = {
+                title: 'Key Financial Ratios (Latest Quarter)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            };
+
+            Plotly.newPlot('ratios-chart', data, layout, {responsive: true});
+        }
+
+        function createPerformanceCharts() {
+            // ROE & ROCE Chart
+            const roeValues = getMetricValues('ROE', 'Financial Ratios');
+            const roceValues = getMetricValues('ROCE', 'Financial Ratios');
+
+            const roeRoceData = [
+                {
+                    x: periods.slice(0, roeValues.length),
+                    y: roeValues.map(v => parseFloat(v)),
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: 'ROE',
+                    line: { color: colors.primary }
+                },
+                {
+                    x: periods.slice(0, roceValues.length),
+                    y: roceValues.map(v => parseFloat(v)),
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: 'ROCE',
+                    line: { color: colors.secondary }
+                }
+            ];
+
+            Plotly.newPlot('roe-roce-chart', roeRoceData, {
+                title: 'Return on Equity vs Return on Capital Employed',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            }, {responsive: true});
+
+            // Margins Chart
+            const marginMetrics = ['Gross Margin', 'Operating Margin', 'Net Margin'];
+            const marginData = [];
+
+            marginMetrics.forEach((metric, index) => {
+                const values = getMetricValues(metric, 'Financial Ratios');
+                if (values.length > 0) {
+                    marginData.push({
+                        x: periods.slice(0, values.length),
+                        y: values.map(v => parseFloat(v)),
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: metric,
+                        fill: 'tonexty',
+                        line: { color: colors.gradients[index][0] }
+                    });
+                }
+            });
+
+            Plotly.newPlot('margins-chart', marginData, {
+                title: 'Margin Analysis',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)'
+            }, {responsive: true});
+        }
+
+        function updateCharts() {
+            createOverviewChart();
+            createRatiosChart();
+            createPerformanceCharts();
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        function downloadCharts() {
+            // Implementation for downloading charts as images
+            alert('Chart download functionality would be implemented here');
+        }
+
+        function showComparison() {
+            const modal = new bootstrap.Modal(document.getElementById('comparisonModal'));
+            modal.show();
+        }
+
+        function fullscreenChart(chartId) {
+            // Implementation for fullscreen chart view
+            alert('Fullscreen chart functionality would be implemented here');
+        }
+
+        // Initialize everything when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSummaryCards();
+            initializeMetricSelector();
+            updateCharts();
+
+            // Add event listeners for controls
+            document.getElementById('chart-type-select').addEventListener('change', updateCharts);
+            document.getElementById('period-select').addEventListener('change', updateCharts);
+        });
+    </script>
+</body>
+</html>

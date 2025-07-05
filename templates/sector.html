@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ sector }} Sector - Financial Comparison</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            padding: 2rem 0;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        .category-header {
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 15px 15px 0 0;
+            font-weight: 600;
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-section {
+            background: rgba(255,255,255,0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #333;
+        }
+        .sector-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+        .comparison-table {
+            font-size: 0.85rem;
+        }
+        .comparison-table th {
+            background: #f8f9fa;
+            border: none;
+            font-weight: 600;
+            padding: 0.75rem 0.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .comparison-table td {
+            border: none;
+            padding: 0.5rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .comparison-table tr:hover {
+            background: #f8f9fa;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            margin: 1rem 0;
+        }
+        .nav-pills .nav-link {
+            border-radius: 20px;
+            margin: 0 0.25rem;
+        }
+        .nav-pills .nav-link.active {
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .category-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+        }
+        .stock-color {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .metric-row {
+            font-weight: 500;
+            color: #495057;
+        }
+        .best-performer {
+            background: rgba(40, 167, 69, 0.1);
+            font-weight: 600;
+            color: #28a745;
+        }
+        .worst-performer {
+            background: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+        }
+        .filter-section {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+        }
+        .filter-btn {
+            margin: 0.25rem;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid main-container">
+        <!-- Header Section -->
+        <div class="row justify-content-center">
+            <div class="col-lg-11">
+                <div class="header-section">
+                    <h1 class="sector-title">
+                        <i class="fas fa-industry"></i> {{ sector }} Sector Analysis
+                    </h1>
+                    <p class="lead">Comparative Financial Analysis - {{ quarters|length }} Quarters</p>
+                    <div class="d-flex justify-content-center gap-3 mt-3">
+                        <a href="/" class="btn btn-outline-primary">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                        <button class="btn btn-outline-success" onclick="downloadComparison()">
+                            <i class="fas fa-download"></i> Export Comparison
+                        </button>
+                        <button class="btn btn-outline-info" onclick="showMetricCharts()">
+                            <i class="fas fa-chart-bar"></i> Metric Charts
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Section -->
+        <div class="row justify-content-center">
+            <div class="col-lg-11">
+                <div class="filter-section">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <h6 class="text-white mb-2"><i class="fas fa-filter"></i> Filter by Metric Category:</h6>
+                            <div id="category-filters">
+                                <button class="btn btn-outline-light filter-btn active" data-category="all">All Categories</button>
+                                <!-- Category filters will be populated by JavaScript -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-white mb-2"><i class="fas fa-calendar"></i> Select Quarter:</h6>
+                            <select class="form-select" id="quarter-select">
+                                <option value="latest">Latest Quarter</option>
+                                {% for quarter in quarters %}
+                                <option value="{{ quarter }}">{{ quarter }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparison by Categories -->
+        <div class="row justify-content-center">
+            <div class="col-lg-11">
+                {% for category, metrics in financial_data.items() %}
+                <div class="card category-card" data-category="{{ category }}">
+                    <div class="category-header">
+                        <div>
+                            {% if category == "Income Statement" %}
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            {% elif category == "Balance Sheet" %}
+                                <i class="fas fa-balance-scale"></i>
+                            {% elif category == "Cash Flow" %}
+                                <i class="fas fa-coins"></i>
+                            {% elif category == "Financial Ratios" %}
+                                <i class="fas fa-calculator"></i>
+                            {% elif category == "Per Share Data" %}
+                                <i class="fas fa-share-alt"></i>
+                            {% elif category == "Valuation Metrics" %}
+                                <i class="fas fa-tag"></i>
+                            {% else %}
+                                <i class="fas fa-chart-pie"></i>
+                            {% endif %}
+                            {{ category }}
+                            <span class="category-badge">{{ metrics|length }} metrics</span>
+                        </div>
+                        <button class="btn btn-outline-light btn-sm" onclick="toggleCategory('{{ category }}')">
+                            <i class="fas fa-chart-line"></i> Chart View
+                        </button>
+                    </div>
+                    
+                    <div class="card-body p-0">
+                        <!-- Navigation tabs -->
+                        <ul class="nav nav-pills nav-fill m-3" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="table-tab-{{ loop.index }}" data-bs-toggle="pill" 
+                                        data-bs-target="#table-{{ loop.index }}" type="button" role="tab">
+                                    <i class="fas fa-table"></i> Comparison Table
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="chart-tab-{{ loop.index }}" data-bs-toggle="pill" 
+                                        data-bs-target="#chart-{{ loop.index }}" type="button" role="tab">
+                                    <i class="fas fa-chart-bar"></i> Visual Comparison
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <!-- Table View -->
+                            <div class="tab-pane fade show active" id="table-{{ loop.index }}" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table comparison-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 25%;">Stock - Metric</th>
+                                                {% for quarter in quarters %}
+                                                <th class="text-center">{{ quarter }}</th>
+                                                {% endfor %}
+                                                <th class="text-center">Trend</th>
+                                                <th class="text-center">Rank</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for metric_key, values in metrics.items() %}
+                                            {% set parts = metric_key.split(' - ') %}
+                                            {% set stock_name = parts[0] %}
+                                            {% set metric_name = parts[1] %}
+                                            <tr class="metric-row">
+                                                <td>
+                                                    <span class="stock-color" style="background-color: {{ get_stock_color(stock_name) or '#667eea' }};"></span>
+                                                    <strong>{{ stock_name }}</strong><br>
+                                                    <small class="text-muted">{{ metric_name }}</small>
+                                                </td>
+                                                {% for value in values %}
+                                                <td class="text-center">
+                                                    {% if value %}
+                                                        {% if value|float > 0 %}
+                                                            <span class="text-success">{{ value }}</span>
+                                                        {% elif value|float < 0 %}
+                                                            <span class="text-danger">{{ value }}</span>
+                                                        {% else %}
+                                                            <span class="text-muted">{{ value }}</span>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                                {% endfor %}
+                                                <td class="text-center">
+                                                    {% set first_val = values[0]|float if values[0] else 0 %}
+                                                    {% set last_val = values[-1]|float if values[-1] else 0 %}
+                                                    {% if last_val > first_val %}
+                                                        <i class="fas fa-arrow-up text-success"></i>
+                                                    {% elif last_val < first_val %}
+                                                        <i class="fas fa-arrow-down text-danger"></i>
+                                                    {% else %}
+                                                        <i class="fas fa-arrow-right text-muted"></i>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-center">
+                                                    <span class="badge bg-secondary">{{ loop.index }}</span>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Chart View -->
+                            <div class="tab-pane fade" id="chart-{{ loop.index }}" role="tabpanel">
+                                <div class="p-3">
+                                    <div class="chart-container">
+                                        <canvas id="comparison-chart-{{ loop.index }}"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Metric Chart Modal -->
+    <div class="modal fade" id="metricChartModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-chart-area"></i> Sector Performance Overview
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="chart-container">
+                                <canvas id="overview-chart-1"></canvas>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="chart-container">
+                                <canvas id="overview-chart-2"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Financial data from Python
+        const financialData = {{ financial_data|safe }};
+        const quarters = {{ quarters|tojson }};
+        const sector = "{{ sector }}";
+
+        // Stock colors for visual distinction
+        const stockColors = [
+            '#667eea', '#764ba2', '#f093fb', '#f5576c', '#4facfe', '#00f2fe',
+            '#43e97b', '#38f9d7', '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3'
+        ];
+
+        let stockColorMap = {};
+
+        function initializeStockColors() {
+            let colorIndex = 0;
+            Object.keys(financialData).forEach(category => {
+                Object.keys(financialData[category]).forEach(metricKey => {
+                    const stockName = metricKey.split(' - ')[0];
+                    if (!stockColorMap[stockName]) {
+                        stockColorMap[stockName] = stockColors[colorIndex % stockColors.length];
+                        colorIndex++;
+                    }
+                });
+            });
+        }
+
+        function createComparisonChart(canvasId, categoryData, category) {
+            const ctx = document.getElementById(canvasId);
+            if (!ctx) return;
+
+            // Prepare data for the chart
+            const datasets = [];
+            const metricNames = [];
+
+            Object.keys(categoryData).forEach(metricKey => {
+                const stockName = metricKey.split(' - ')[0];
+                const metricName = metricKey.split(' - ')[1];
+                
+                if (!metricNames.includes(metricName)) {
+                    metricNames.push(metricName);
+                }
+
+                // Get latest quarter data
+                const latestValues = categoryData[metricKey];
+                const latestValue = latestValues[latestValues.length - 1];
+
+                if (latestValue && latestValue !== "") {
+                    let dataset = datasets.find(d => d.label === stockName);
+                    if (!dataset) {
+                        dataset = {
+                            label: stockName,
+                            data: [],
+                            backgroundColor: stockColorMap[stockName] + '80',
+                            borderColor: stockColorMap[stockName],
+                            borderWidth: 2
+                        };
+                        datasets.push(dataset);
+                    }
+                    dataset.data.push(parseFloat(latestValue));
+                }
+            });
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: metricNames.slice(0, 10), // Limit to first 10 metrics
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${category} - Latest Quarter Comparison`
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxRotation: 45
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    if (Math.abs(value) >= 1000000) {
+                                        return (value / 1000000).toFixed(1) + 'M';
+                                    } else if (Math.abs(value) >= 1000) {
+                                        return (value / 1000).toFixed(1) + 'K';
+                                    }
+                                    return value;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function initializeFilters() {
+            const filterContainer = document.getElementById('category-filters');
+            const categories = Object.keys(financialData);
+            
+            categories.forEach(category => {
+                const button = document.createElement('button');
+                button.className = 'btn btn-outline-light filter-btn';
+                button.setAttribute('data-category', category);
+                button.textContent = category;
+                button.onclick = () => filterByCategory(category);
+                filterContainer.appendChild(button);
+            });
+        }
+
+        function filterByCategory(category) {
+            // Update filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-category="${category}"]`).classList.add('active');
+
+            // Show/hide category cards
+            document.querySelectorAll('.category-card').forEach(card => {
+                if (category === 'all' || card.getAttribute('data-category') === category) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function downloadComparison() {
+            let csv = 'Category,Stock,Metric,' + quarters.join(',') + '\n';
+            
+            Object.keys(financialData).forEach(category => {
+                const metrics = financialData[category];
+                Object.keys(metrics).forEach(metricKey => {
+                    const parts = metricKey.split(' - ');
+                    const stock = parts[0];
+                    const metric = parts[1];
+                    const values = metrics[metricKey];
+                    csv += `"${category}","${stock}","${metric}",${values.join(',')}\n`;
+                });
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${sector}_sector_comparison.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function showMetricCharts() {
+            const modal = new bootstrap.Modal(document.getElementById('metricChartModal'));
+            modal.show();
+        }
+
+        function toggleCategory(category) {
+            // Find the corresponding chart tab and activate it
+            const categoryCards = document.querySelectorAll('.category-card');
+            categoryCards.forEach((card, index) => {
+                if (card.getAttribute('data-category') === category) {
+                    const chartTab = document.querySelector(`#chart-tab-${index + 1}`);
+                    if (chartTab) {
+                        const tabInstance = new bootstrap.Tab(chartTab);
+                        tabInstance.show();
+                    }
+                }
+            });
+        }
+
+        // Initialize everything when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeStockColors();
+            initializeFilters();
+
+            // Create comparison charts for each category
+            let categoryIndex = 1;
+            Object.keys(financialData).forEach(category => {
+                setTimeout(() => {
+                    createComparisonChart(`comparison-chart-${categoryIndex}`, financialData[category], category);
+                }, 100 * categoryIndex);
+                categoryIndex++;
+            });
+
+            // Add quarter selection functionality
+            document.getElementById('quarter-select').addEventListener('change', function() {
+                const selectedQuarter = this.value;
+                // Update charts based on selected quarter
+                // This would require chart recreation with filtered data
+            });
+        });
+    </script>
+</body>
+</html>
