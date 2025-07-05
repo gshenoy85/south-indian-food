@@ -187,25 +187,43 @@ def visualize():
     try:
         conn = snowflake_connect()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM FINANCIALS_QUARTERLY WHERE STOCK_CODE=%s", (stock,))
+        
+        # Select only the columns we need to avoid datetime serialization issues
+        cur.execute("""
+            SELECT STOCK_CODE, METRIC, QUARTER, VALUE, INDUSTRY, CATEGORY
+            FROM FINANCIALS_QUARTERLY 
+            WHERE STOCK_CODE=%s
+            ORDER BY METRIC, QUARTER
+        """, (stock,))
         rows = cur.fetchall()
 
         if not rows:
             return f"<h2>No data found in Snowflake for {stock}</h2>"
 
+        # Group data by metric and quarter
         financial_data = {}
-        years = ["2025", "2024", "2023", "2022", "2021"]  # <- replace generic labels
+        quarters = set()
+        
+        for stock_code, metric, quarter, value, industry, category in rows:
+            quarters.add(quarter)
+            if metric not in financial_data:
+                financial_data[metric] = {}
+            financial_data[metric][quarter] = value
 
-        for row in rows:
-            metric = row[1]
-            values = row[2:7]
-            financial_data[metric] = values
+        # Sort quarters chronologically
+        quarters = sorted(quarters)
+
+        # Convert to format expected by template
+        formatted_data = {
+            metric: [financial_data[metric].get(q, "") for q in quarters]
+            for metric in financial_data
+        }
 
         conn.close()
         return render_template("visualize.html",
                             stock=stock,
-                            years=years,
-                            financial_data=json.dumps(financial_data),
+                            years=quarters,  # Use actual quarters instead of generic years
+                            financial_data=json.dumps(formatted_data),
                             metric_categories=METRIC_CATEGORIES)
     
     except Exception as e:
