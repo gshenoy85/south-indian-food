@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Sector View: {{ sector }}</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <h2>📊 Sector Comparison: {{ sector }}</h2>
+  <label for="seriesSelect"><strong>Select up to 5 metric-stock series:</strong></label><br>
+  <select id="seriesSelect" multiple size="10" style="min-width:300px;">
+    {% for key in financial_data %}
+      <option value="{{ key }}">{{ key }}</option>
+    {% endfor %}
+  </select>
+  <button onclick="drawGraph()">Generate Graph</button>
+
+  <div id="graph" style="margin-top: 20px;"></div>
+
+  <script>
+    const data = JSON.parse('{{ financial_data | safe }}');
+    const quarters = {{ quarters | tojson }};
+    const select = document.getElementById("seriesSelect");
+
+    function getSelected() {
+      return [...select.options].filter(opt => opt.selected).map(opt => opt.value);
+    }
+
+    function drawGraph() {
+      const selected = getSelected();
+      const traces = selected.map(name => ({
+        x: quarters,
+        y: data[name],
+        name,
+        type: 'scatter',
+        mode: 'lines+markers'
+      }));
+      Plotly.newPlot("graph", traces, {
+        title: "Sector Financial Comparison",
+        xaxis: { title: "Quarter" },
+        yaxis: { title: "Value" }
+      });
+    }
+  </script>
+</body>
+</html>
