@@ -212,7 +212,23 @@ def quarterly_view(stock):
             category = categories[metric]
             if category not in categorized_data:
                 categorized_data[category] = {}
-            categorized_data[category][metric] = [quarter_data.get(q, "") for q in quarters]
+            
+            # Clean and filter values for charts
+            values = []
+            for q in quarters:
+                value = quarter_data.get(q, "")
+                # Ensure we have valid numeric data
+                if value and str(value).strip() and value != "":
+                    try:
+                        # Try to convert to float to validate
+                        float(value)
+                        values.append(str(value))
+                    except (ValueError, TypeError):
+                        values.append("")
+                else:
+                    values.append("")
+            
+            categorized_data[category][metric] = values
 
         conn.close()
         return render_template("quarterly.html",
@@ -332,6 +348,50 @@ def visualize():
     except Exception as e:
         logger.error(f"Error in visualize for {stock}: {e}")
         return f"<h2>Error loading data for {stock}</h2>"
+
+@app.route("/debug/<stock>")
+def debug_data(stock):
+    """Debug route to see raw data structure"""
+    try:
+        conn = snowflake_connect()
+        cur = conn.cursor()
+
+        # First check if table exists and has data
+        cur.execute("SELECT COUNT(*) FROM FINANCIALS_QUARTERLY")
+        total_count = cur.fetchone()[0]
+        
+        # Check for specific stock
+        cur.execute("SELECT COUNT(*) FROM FINANCIALS_QUARTERLY WHERE STOCK_CODE=%s", (stock,))
+        stock_count = cur.fetchone()[0]
+
+        cur.execute("""
+            SELECT METRIC, QUARTER, VALUE, METRIC_CATEGORY
+            FROM FINANCIALS_QUARTERLY
+            WHERE STOCK_CODE=%s
+            ORDER BY METRIC_CATEGORY, METRIC, QUARTER
+            LIMIT 20
+        """, (stock,))
+        rows = cur.fetchall()
+
+        debug_info = {
+            "table_total_rows": total_count,
+            "stock_rows": stock_count,
+            "sample_rows": rows,
+            "unique_categories": list(set([row[3] for row in rows])) if rows else [],
+            "unique_quarters": list(set([row[1] for row in rows])) if rows else [],
+            "value_types": [type(row[2]).__name__ for row in rows[:5]] if rows else [],
+            "data_structure_test": {
+                "stock": stock,
+                "has_data": len(rows) > 0,
+                "first_metric": rows[0] if rows else None
+            }
+        }
+        
+        conn.close()
+        return f"<pre>{json.dumps(debug_info, indent=2, default=str)}</pre>"
+        
+    except Exception as e:
+        return f"<pre>Error: {str(e)}</pre>"
 
 # ------------------- Enhanced Screener Scraper -------------------
 def clean_metric_name(metric_name: str) -> str:

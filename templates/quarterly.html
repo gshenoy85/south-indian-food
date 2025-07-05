@@ -271,20 +271,31 @@
 
         function createChart(canvasId, metricName, data, category) {
             const ctx = document.getElementById(canvasId);
-            if (!ctx) return;
+            if (!ctx) {
+                console.log(`Canvas not found: ${canvasId}`);
+                return;
+            }
 
             // Filter out empty values and corresponding quarters
             const filteredData = [];
             const filteredQuarters = [];
             
             data.forEach((value, index) => {
-                if (value !== "" && value !== null && value !== undefined) {
-                    filteredData.push(parseFloat(value));
-                    filteredQuarters.push(quarters[index]);
+                if (value !== "" && value !== null && value !== undefined && value !== "null") {
+                    const numValue = parseFloat(value);
+                    if (!isNaN(numValue)) {
+                        filteredData.push(numValue);
+                        filteredQuarters.push(quarters[index]);
+                    }
                 }
             });
 
-            if (filteredData.length === 0) return;
+            if (filteredData.length === 0) {
+                console.log(`No valid data for ${metricName}`);
+                return;
+            }
+
+            console.log(`Creating chart for ${metricName} with ${filteredData.length} data points`);
 
             const colorIndex = Math.abs(metricName.split('').reduce((a, b) => a + b.charCodeAt(0), 0)) % chartColors.length;
 
@@ -358,8 +369,29 @@
             });
         }
 
+        // Debug function to check data
+        function debugData() {
+            console.log("=== DEBUG INFO ===");
+            console.log("Financial Data:", financialData);
+            console.log("Quarters:", quarters);
+            console.log("Categories:", Object.keys(financialData));
+            
+            Object.keys(financialData).forEach(category => {
+                console.log(`Category: ${category}`);
+                const metrics = financialData[category];
+                Object.keys(metrics).forEach(metricName => {
+                    const values = metrics[metricName];
+                    const validValues = values.filter(v => v !== "" && v !== null && !isNaN(parseFloat(v)));
+                    console.log(`  ${metricName}: ${validValues.length}/${values.length} valid values`);
+                });
+            });
+        }
+
         // Initialize charts when chart tabs are shown
         document.addEventListener('DOMContentLoaded', function() {
+            // Debug the data first
+            debugData();
+            
             // Create charts for each category
             let chartIndex = 1;
             Object.keys(financialData).forEach(category => {
@@ -369,6 +401,7 @@
                 Object.keys(metrics).forEach(metricName => {
                     if (metricIndex <= 6) { // Limit to 6 charts per category
                         const canvasId = `chart-${category.replace(/\s+/g, '-')}-${metricIndex}`;
+                        console.log(`Looking for canvas: ${canvasId}`);
                         const metricData = metrics[metricName];
                         
                         // Delay chart creation to ensure DOM is ready
