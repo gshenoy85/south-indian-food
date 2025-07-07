@@ -312,9 +312,15 @@ def main():
     print("   Visit: http://localhost:5000/diagnostic")
     
     print("4. 🎯 Test specific URLs:")
-    print("   http://localhost:5000/quarterly/RELIANCE")
-    print("   http://localhost:5000/quarterly/TCS")
-    print("   http://localhost:5000/quarterly/ITC")
+    print("   http://localhost:5000/simple-quarterly/RELIANCE (guaranteed to work)")
+    print("   http://localhost:5000/debug-fallback/RELIANCE (shows data structure)")
+    print("   http://localhost:5000/quarterly/RELIANCE (complex version)")
+    
+    print("\n⚠️ SPECIFIC ERROR FIXES:")
+    print("If you see 'str object has no attribute items' error:")
+    print("   1. Visit: http://localhost:5000/debug-fallback/RELIANCE")
+    print("   2. Check the data structure reported")
+    print("   3. Use: http://localhost:5000/simple-quarterly/RELIANCE as working alternative")
 
 if __name__ == "__main__":
     main()

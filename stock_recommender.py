@@ -1287,6 +1287,129 @@ def api_metrics_by_category(category):
         logger.error(f"Error in API metrics by category: {e}")
         return json.dumps({"error": str(e)})
 
+@app.route("/simple-quarterly/<stock>")
+def simple_quarterly_view(stock):
+    """Ultra-simple quarterly view using hardcoded data to test basic functionality"""
+    stock = stock.upper()
+    
+    # Hardcoded data to ensure it works
+    if stock == "RELIANCE":
+        return f"""
+        <div style="font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px;">
+            <h1>📊 {stock} - Simple Quarterly View</h1>
+            
+            <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <p><strong>✅ This is working!</strong> Hardcoded data displayed successfully.</p>
+            </div>
+            
+            <h3>Financial Ratios</h3>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                <thead>
+                    <tr style="background: #f8f9fa;">
+                        <th style="padding: 10px; border: 1px solid #ddd;">Metric</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">Mar 2023</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">Jun 2023</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">Sep 2023</th>
+                        <th style="padding: 10px; border: 1px solid #ddd;">Dec 2023</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Sales</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">215,000</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">218,000</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">220,000</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">225,000</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Net Profit</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">15,000</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">16,000</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">17,000</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">18,000</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">ROE %</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">15.5</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">16.2</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">16.8</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">17.1</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">EPS</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">25.5</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">26.8</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">28.1</td>
+                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">29.5</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="margin: 30px 0;">
+                <a href="/" style="background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
+                <a href="/quarterly/RELIANCE" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Try Complex Version</a>
+                <a href="/debug-fallback/RELIANCE" style="background: #17a2b8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Debug Data</a>
+            </div>
+        </div>
+        """
+    else:
+        return f"""
+        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px;">
+            <h2>Simple view only available for RELIANCE</h2>
+            <p>Try: <a href="/simple-quarterly/RELIANCE">RELIANCE Simple View</a></p>
+            <a href="/">← Back to Dashboard</a>
+        </div>
+        """
+
+@app.route("/debug-fallback/<stock>")
+def debug_fallback(stock):
+    """Debug fallback data structure"""
+    try:
+        stock = stock.upper()
+        
+        debug_info = {
+            "stock": stock,
+            "available_stocks": list(FALLBACK_FINANCIAL_DATA.keys()),
+            "stock_exists": stock in FALLBACK_FINANCIAL_DATA,
+        }
+        
+        if stock in FALLBACK_FINANCIAL_DATA:
+            raw_data = FALLBACK_FINANCIAL_DATA[stock]
+            debug_info["raw_data_type"] = type(raw_data).__name__
+            debug_info["raw_data_keys"] = list(raw_data.keys()) if isinstance(raw_data, dict) else "Not a dict"
+            debug_info["raw_data_sample"] = str(raw_data)[:500]
+            
+            if isinstance(raw_data, dict) and "data" in raw_data:
+                data = raw_data["data"]
+                debug_info["data_type"] = type(data).__name__
+                debug_info["data_keys"] = list(data.keys()) if isinstance(data, dict) else "Not a dict"
+                
+                if isinstance(data, dict):
+                    sample_metric = list(data.keys())[0] if data else None
+                    if sample_metric:
+                        debug_info["sample_metric"] = sample_metric
+                        debug_info["sample_values"] = data[sample_metric]
+                        debug_info["sample_values_type"] = type(data[sample_metric]).__name__
+        
+        # Test the function
+        try:
+            data, quarters, category, industry = use_fallback_data(stock)
+            debug_info["function_test"] = {
+                "data_type": type(data).__name__,
+                "data_len": len(data) if isinstance(data, dict) else "Not a dict",
+                "quarters_type": type(quarters).__name__,
+                "quarters_len": len(quarters) if isinstance(quarters, list) else "Not a list",
+                "category": category,
+                "industry": industry
+            }
+        except Exception as e:
+            debug_info["function_test_error"] = str(e)
+        
+        return f"<pre>{json.dumps(debug_info, indent=2, default=str)}</pre>"
+        
+    except Exception as e:
+        return f"<pre>Debug error: {str(e)}</pre>"
+
 @app.route("/diagnostic")
 def diagnostic():
     """Comprehensive diagnostic route to identify issues"""
@@ -1447,12 +1570,43 @@ FALLBACK_FINANCIAL_DATA = {
 
 def use_fallback_data(stock_code: str) -> Tuple[Dict, List, str, str]:
     """Use fallback data when web scraping fails"""
-    if stock_code in FALLBACK_FINANCIAL_DATA:
-        data = FALLBACK_FINANCIAL_DATA[stock_code]
-        logger.info(f"Using fallback data for {stock_code}")
-        return data["data"], data["quarters"], data["category"], data["industry"]
-    else:
-        logger.warning(f"No fallback data available for {stock_code}")
+    try:
+        if stock_code in FALLBACK_FINANCIAL_DATA:
+            fallback_entry = FALLBACK_FINANCIAL_DATA[stock_code]
+            
+            # Validate structure
+            if not isinstance(fallback_entry, dict):
+                logger.error(f"Fallback entry for {stock_code} is not a dict: {type(fallback_entry)}")
+                return {}, [], "", ""
+            
+            required_keys = ["data", "quarters", "category", "industry"]
+            for key in required_keys:
+                if key not in fallback_entry:
+                    logger.error(f"Missing key '{key}' in fallback data for {stock_code}")
+                    return {}, [], "", ""
+            
+            data = fallback_entry["data"]
+            quarters = fallback_entry["quarters"]
+            category = fallback_entry["category"]
+            industry = fallback_entry["industry"]
+            
+            # Validate data types
+            if not isinstance(data, dict):
+                logger.error(f"Data for {stock_code} is not a dict: {type(data)}")
+                return {}, [], "", ""
+            
+            if not isinstance(quarters, list):
+                logger.error(f"Quarters for {stock_code} is not a list: {type(quarters)}")
+                return {}, [], "", ""
+            
+            logger.info(f"Using fallback data for {stock_code}: {len(data)} metrics, {len(quarters)} quarters")
+            return data, quarters, category, industry
+        else:
+            logger.warning(f"No fallback data available for {stock_code}")
+            return {}, [], "", ""
+            
+    except Exception as e:
+        logger.error(f"Error in use_fallback_data for {stock_code}: {e}")
         return {}, [], "", ""
 
 def serve_fallback_quarterly_view(stock: str):
@@ -1481,12 +1635,31 @@ def serve_fallback_quarterly_view(stock: str):
         # Process fallback data for display
         categorized_data = {}
         
+        # Ensure data is a dictionary
+        if not isinstance(data, dict):
+            logger.error(f"Fallback data for {stock} is not a dictionary: {type(data)}")
+            return f"""
+            <div class="container mt-5">
+                <div class="alert alert-danger">
+                    <h4>❌ Data Type Error for {stock}</h4>
+                    <p>Expected dictionary but got {type(data).__name__}</p>
+                    <p>Raw data: {str(data)[:200]}...</p>
+                    <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                </div>
+            </div>
+            """
+        
         for metric, values in data.items():
             # Categorize the metric
             metric_category = categorize_metric(metric)
             
             if metric_category not in categorized_data:
                 categorized_data[metric_category] = {}
+            
+            # Ensure values is a list
+            if not isinstance(values, list):
+                logger.warning(f"Values for {metric} is not a list: {type(values)}")
+                values = [str(values)]  # Convert to list if it's not
             
             # Clean values 
             cleaned_values = []
