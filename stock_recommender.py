@@ -177,11 +177,25 @@ app = Flask(__name__)
 @app.route("/quarterly/<stock>")
 def quarterly_view(stock):
     try:
-        # First, ensure the table exists
-        create_snowflake_table()
+        # Check if we can connect to Snowflake at all
+        try:
+            conn = snowflake_connect()
+            cur = conn.cursor()
+            # Test basic connectivity
+            cur.execute("SELECT 1")
+            cur.fetchone()
+        except Exception as db_error:
+            logger.error(f"Snowflake connection failed: {db_error}")
+            # Use fallback data directly when database is unavailable
+            return serve_fallback_quarterly_view(stock)
         
-        conn = snowflake_connect()
-        cur = conn.cursor()
+        # Try to ensure the table exists
+        try:
+            create_snowflake_table()
+        except Exception as table_error:
+            logger.error(f"Table creation failed: {table_error}")
+            conn.close()
+            return serve_fallback_quarterly_view(stock)
 
         # Check if data exists for this stock
         cur.execute("""
@@ -1273,6 +1287,115 @@ def api_metrics_by_category(category):
         logger.error(f"Error in API metrics by category: {e}")
         return json.dumps({"error": str(e)})
 
+@app.route("/diagnostic")
+def diagnostic():
+    """Comprehensive diagnostic route to identify issues"""
+    diagnostics = {
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "environment_check": {},
+        "database_check": {},
+        "fallback_check": {},
+        "import_check": {},
+        "overall_status": "Unknown"
+    }
+    
+    # 1. Environment Variables Check
+    try:
+        required_vars = ["SNOWFLAKE_USER", "SNOWFLAKE_PASSWORD", "SNOWFLAKE_ACCOUNT"]
+        for var in required_vars:
+            value = os.getenv(var)
+            diagnostics["environment_check"][var] = "✅ Set" if value else "❌ Missing"
+        
+        env_status = all(os.getenv(var) for var in required_vars)
+        diagnostics["environment_check"]["status"] = "✅ All Required Variables Set" if env_status else "❌ Missing Variables"
+    except Exception as e:
+        diagnostics["environment_check"]["error"] = str(e)
+    
+    # 2. Database Connection Check
+    try:
+        conn = snowflake_connect()
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        result = cur.fetchone()
+        conn.close()
+        
+        diagnostics["database_check"]["connection"] = "✅ Successful"
+        diagnostics["database_check"]["test_query"] = "✅ Working"
+    except Exception as e:
+        diagnostics["database_check"]["connection"] = "❌ Failed"
+        diagnostics["database_check"]["error"] = str(e)
+    
+    # 3. Table Check
+    try:
+        conn = snowflake_connect()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM FINANCIALS_QUARTERLY")
+        count = cur.fetchone()[0]
+        conn.close()
+        
+        diagnostics["database_check"]["table_exists"] = "✅ Yes"
+        diagnostics["database_check"]["row_count"] = count
+    except Exception as e:
+        diagnostics["database_check"]["table_check"] = "❌ Failed"
+        diagnostics["database_check"]["table_error"] = str(e)
+    
+    # 4. Fallback Data Check
+    try:
+        diagnostics["fallback_check"]["available_stocks"] = list(FALLBACK_FINANCIAL_DATA.keys())
+        diagnostics["fallback_check"]["count"] = len(FALLBACK_FINANCIAL_DATA)
+        
+        # Test one fallback
+        data, quarters, category, industry = use_fallback_data("RELIANCE")
+        if data and quarters:
+            diagnostics["fallback_check"]["test_reliance"] = "✅ Working"
+            diagnostics["fallback_check"]["sample_metrics"] = list(data.keys())[:3]
+        else:
+            diagnostics["fallback_check"]["test_reliance"] = "❌ Failed"
+    except Exception as e:
+        diagnostics["fallback_check"]["error"] = str(e)
+    
+    # 5. Import Check
+    try:
+        import snowflake.connector
+        import pandas as pd
+        import requests
+        from bs4 import BeautifulSoup
+        from flask import Flask, render_template, request
+        
+        diagnostics["import_check"]["snowflake"] = "✅ Available"
+        diagnostics["import_check"]["pandas"] = "✅ Available"
+        diagnostics["import_check"]["requests"] = "✅ Available"
+        diagnostics["import_check"]["beautifulsoup"] = "✅ Available"
+        diagnostics["import_check"]["flask"] = "✅ Available"
+    except Exception as e:
+        diagnostics["import_check"]["error"] = str(e)
+    
+    # 6. Overall Status
+    db_working = diagnostics["database_check"].get("connection") == "✅ Successful"
+    fallback_working = diagnostics["fallback_check"].get("test_reliance") == "✅ Working"
+    
+    if db_working:
+        diagnostics["overall_status"] = "✅ Database Available - Full Functionality"
+    elif fallback_working:
+        diagnostics["overall_status"] = "⚠️ Database Unavailable - Fallback Mode Active"
+    else:
+        diagnostics["overall_status"] = "❌ Critical Issues - Limited Functionality"
+    
+    # 7. Recommendations
+    recommendations = []
+    if not db_working:
+        recommendations.append("🔧 Check Snowflake environment variables")
+        recommendations.append("🔧 Verify Snowflake credentials")
+        recommendations.append("🔧 Test database connectivity")
+    
+    if fallback_working:
+        recommendations.append("✅ Fallback data available for testing")
+        recommendations.append("🎯 Try: /quarterly/RELIANCE")
+    
+    diagnostics["recommendations"] = recommendations
+    
+    return f"<pre>{json.dumps(diagnostics, indent=2, default=str)}</pre>"
+
 # ------------------- Fallback Data for Testing -------------------
 FALLBACK_FINANCIAL_DATA = {
     "RELIANCE": {
@@ -1331,6 +1454,90 @@ def use_fallback_data(stock_code: str) -> Tuple[Dict, List, str, str]:
     else:
         logger.warning(f"No fallback data available for {stock_code}")
         return {}, [], "", ""
+
+def serve_fallback_quarterly_view(stock: str):
+    """Serve quarterly view using only fallback data (no database required)"""
+    try:
+        # Get fallback data
+        data, quarters, category, industry = use_fallback_data(stock)
+        
+        if not data or not quarters:
+            return f"""
+            <div class="container mt-5">
+                <div class="alert alert-warning">
+                    <h4>⚠️ Database Not Available & No Fallback Data</h4>
+                    <p>Unable to connect to database and no fallback data available for {stock}.</p>
+                    <p><strong>Available stocks with fallback data:</strong> RELIANCE, TCS, ITC</p>
+                    <div class="mt-3">
+                        <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                        <a href="/quarterly/RELIANCE" class="btn btn-success">Try RELIANCE</a>
+                        <a href="/quarterly/TCS" class="btn btn-info">Try TCS</a>
+                        <a href="/quarterly/ITC" class="btn btn-secondary">Try ITC</a>
+                    </div>
+                </div>
+            </div>
+            """
+        
+        # Process fallback data for display
+        categorized_data = {}
+        
+        for metric, values in data.items():
+            # Categorize the metric
+            metric_category = categorize_metric(metric)
+            
+            if metric_category not in categorized_data:
+                categorized_data[metric_category] = {}
+            
+            # Clean values 
+            cleaned_values = []
+            for value in values:
+                cleaned_value = clean_value(str(value))
+                if cleaned_value:
+                    cleaned_values.append(cleaned_value)
+                else:
+                    cleaned_values.append(str(value))  # Keep original if cleaning fails
+            
+            categorized_data[metric_category][metric] = cleaned_values
+        
+        # Add notice about fallback data
+        fallback_notice = f"""
+        <div class="alert alert-info mb-4">
+            <h5>📊 Displaying Sample Data for {stock}</h5>
+            <p><strong>Note:</strong> Database connection unavailable. Showing sample financial data for demonstration.</p>
+            <p><strong>Data Source:</strong> Built-in fallback data | <strong>Category:</strong> {category} | <strong>Industry:</strong> {industry}</p>
+        </div>
+        """
+        
+        # Render the template with fallback data
+        quarterly_html = render_template("quarterly.html",
+                                       stock=stock,
+                                       quarters=quarters,
+                                       financial_data=json.dumps(categorized_data),
+                                       metric_categories=categorized_data)
+        
+        # Inject the notice into the HTML
+        if '<div class="container">' in quarterly_html:
+            quarterly_html = quarterly_html.replace(
+                '<div class="container">', 
+                f'<div class="container">{fallback_notice}', 
+                1
+            )
+        
+        return quarterly_html
+        
+    except Exception as e:
+        logger.error(f"Error in fallback quarterly view for {stock}: {e}")
+        return f"""
+        <div class="container mt-5">
+            <div class="alert alert-danger">
+                <h4>❌ Fallback Error for {stock}</h4>
+                <p>Error: {str(e)}</p>
+                <div class="mt-3">
+                    <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+        """
 
 # ------------------- Main -------------------
 if __name__ == '__main__':
