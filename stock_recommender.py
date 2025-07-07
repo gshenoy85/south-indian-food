@@ -177,9 +177,13 @@ app = Flask(__name__)
 @app.route("/quarterly/<stock>")
 def quarterly_view(stock):
     try:
+        # First, ensure the table exists
+        create_snowflake_table()
+        
         conn = snowflake_connect()
         cur = conn.cursor()
 
+        # Check if data exists for this stock
         cur.execute("""
             SELECT METRIC, QUARTER, VALUE, METRIC_CATEGORY
             FROM FINANCIALS_QUARTERLY
@@ -188,9 +192,86 @@ def quarterly_view(stock):
         """, (stock,))
         rows = cur.fetchall()
 
+        # If no data found, try to load it automatically
         if not rows:
-            return f"<h2>No data found for {stock}</h2>"
+            logger.info(f"No data found for {stock}, attempting to load...")
+            try:
+                # Get financial data (with fallback)
+                data, quarters, category, industry = get_financial_data(stock)
+                
+                if data and quarters:
+                    # Insert the data
+                    insert_quarterly_to_snowflake(conn, stock, data, quarters, category, industry)
+                    logger.info(f"Successfully loaded data for {stock}")
+                    
+                    # Re-query the database
+                    cur.execute("""
+                        SELECT METRIC, QUARTER, VALUE, METRIC_CATEGORY
+                        FROM FINANCIALS_QUARTERLY
+                        WHERE STOCK_CODE=%s
+                        ORDER BY METRIC_CATEGORY, METRIC, QUARTER
+                    """, (stock,))
+                    rows = cur.fetchall()
+                else:
+                    conn.close()
+                    return f"""
+                    <div class="container mt-5">
+                        <div class="alert alert-warning">
+                            <h4>⚠️ No data available for {stock}</h4>
+                            <p>Unable to fetch financial data from external sources.</p>
+                            <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                            <a href="/test-scraper/{stock}" class="btn btn-secondary" target="_blank">🔧 Test Data Source</a>
+                        </div>
+                    </div>
+                    """
+            except Exception as load_error:
+                logger.error(f"Failed to load data for {stock}: {load_error}")
+                conn.close()
+                return f"""
+                <div class="container mt-5">
+                    <div class="alert alert-danger">
+                        <h4>❌ Error loading data for {stock}</h4>
+                        <p>Error: {str(load_error)}</p>
+                        <div class="mt-3">
+                            <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                            <a href="/test-scraper/{stock}" class="btn btn-secondary" target="_blank">🔧 Test Data Source</a>
+                            <a href="/debug/{stock}" class="btn btn-info" target="_blank">🔍 Debug Database</a>
+                        </div>
+                    </div>
+                </div>
+                """
 
+        # If still no data after attempting to load
+        if not rows:
+            conn.close()
+            return f"""
+            <div class="container mt-5">
+                <div class="alert alert-info">
+                    <h4>📊 No data found for {stock}</h4>
+                    <p>This stock may not be available in our data sources.</p>
+                    <div class="mt-3">
+                        <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                        <button class="btn btn-success" onclick="loadStockData('{stock}')">🔄 Try Loading Data</button>
+                        <a href="/test-scraper/{stock}" class="btn btn-secondary" target="_blank">🔧 Test Data Source</a>
+                    </div>
+                </div>
+                <script>
+                function loadStockData(stock) {{
+                    fetch(`/load-single/${{stock}}`, {{method: 'POST'}})
+                    .then(response => response.json())
+                    .then(data => {{
+                        if (data.status === 'success') {{
+                            location.reload();
+                        }} else {{
+                            alert('Error: ' + data.message);
+                        }}
+                    }});
+                }}
+                </script>
+            </div>
+            """
+
+        # Process the data for display
         financial_data = {}
         quarters = []
         categories = {}
@@ -239,7 +320,18 @@ def quarterly_view(stock):
     
     except Exception as e:
         logger.error(f"Error in quarterly view for {stock}: {e}")
-        return f"<h2>Error loading data for {stock}</h2>"
+        return f"""
+        <div class="container mt-5">
+            <div class="alert alert-danger">
+                <h4>❌ Database Error for {stock}</h4>
+                <p>Error: {str(e)}</p>
+                <div class="mt-3">
+                    <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                    <a href="/debug/{stock}" class="btn btn-info" target="_blank">🔍 Debug Database</a>
+                </div>
+            </div>
+        </div>
+        """
 
 @app.route("/sector/<sector>")
 def sector_view(sector):
@@ -313,6 +405,9 @@ def index():
 def visualize():
     stock = request.form['stock']
     try:
+        # Ensure table exists
+        create_snowflake_table()
+        
         conn = snowflake_connect()
         cur = conn.cursor()
         
@@ -325,8 +420,66 @@ def visualize():
         """, (stock,))
         rows = cur.fetchall()
 
+        # If no data found, try to load it automatically
         if not rows:
-            return f"<h2>No data found in Snowflake for {stock}</h2>"
+            logger.info(f"No data found for {stock}, attempting to load...")
+            try:
+                # Get financial data (with fallback)
+                data, quarters, category, industry = get_financial_data(stock)
+                
+                if data and quarters:
+                    # Insert the data
+                    insert_quarterly_to_snowflake(conn, stock, data, quarters, category, industry)
+                    logger.info(f"Successfully loaded data for {stock}")
+                    
+                    # Re-query the database
+                    cur.execute("""
+                        SELECT STOCK_CODE, METRIC, QUARTER, VALUE, INDUSTRY, CATEGORY, METRIC_CATEGORY
+                        FROM FINANCIALS_QUARTERLY 
+                        WHERE STOCK_CODE=%s
+                        ORDER BY METRIC_CATEGORY, METRIC, QUARTER
+                    """, (stock,))
+                    rows = cur.fetchall()
+                else:
+                    conn.close()
+                    return f"""
+                    <div class="container mt-5">
+                        <div class="alert alert-warning">
+                            <h4>⚠️ No data available for {stock}</h4>
+                            <p>Unable to fetch financial data from external sources.</p>
+                            <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                            <a href="/test-scraper/{stock}" class="btn btn-secondary" target="_blank">🔧 Test Data Source</a>
+                        </div>
+                    </div>
+                    """
+            except Exception as load_error:
+                logger.error(f"Failed to load data for {stock}: {load_error}")
+                conn.close()
+                return f"""
+                <div class="container mt-5">
+                    <div class="alert alert-danger">
+                        <h4>❌ Error loading data for {stock}</h4>
+                        <p>Error: {str(load_error)}</p>
+                        <div class="mt-3">
+                            <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                            <a href="/test-scraper/{stock}" class="btn btn-secondary" target="_blank">🔧 Test Data Source</a>
+                        </div>
+                    </div>
+                </div>
+                """
+
+        # If still no data
+        if not rows:
+            conn.close()
+            return f"""
+            <div class="container mt-5">
+                <div class="alert alert-info">
+                    <h4>📊 No data found for {stock}</h4>
+                    <p>This stock may not be available in our data sources.</p>
+                    <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                </div>
+            </div>
+            """
 
         # Group data by metric category and quarter
         categorized_data = {}
@@ -361,7 +514,15 @@ def visualize():
     
     except Exception as e:
         logger.error(f"Error in visualize for {stock}: {e}")
-        return f"<h2>Error loading data for {stock}</h2>"
+        return f"""
+        <div class="container mt-5">
+            <div class="alert alert-danger">
+                <h4>❌ Database Error for {stock}</h4>
+                <p>Error: {str(e)}</p>
+                <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+            </div>
+        </div>
+        """
 
 @app.route("/debug/<stock>")
 def debug_data(stock):
