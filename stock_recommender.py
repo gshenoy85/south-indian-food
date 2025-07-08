@@ -26,7 +26,7 @@ HEADERS = {
     "Cookie": os.getenv("SCREENER_COOKIE", "")
 }
 STOCKS = {
-    "Large Cap": ["RELIANCE", "TCS", "ITC"],
+    "Large Cap": ["RELIANCE", "TCS", "ITC","HDFCBANK"],
     "Mid Cap": ["PIDILITIND", "CUMMINSIND"],
     "Small Cap": ["HATSUN", "BALAMINES"]
 }
@@ -350,66 +350,233 @@ def quarterly_view(stock):
 @app.route("/sector/<sector>")
 def sector_view(sector):
     try:
-        conn = snowflake_connect()
-        cur = conn.cursor()
-
-        # First, get all available sectors/categories
-        cur.execute("SELECT DISTINCT CATEGORY FROM FINANCIALS_QUARTERLY WHERE CATEGORY IS NOT NULL")
-        available_categories = [row[0] for row in cur.fetchall()]
+        # First try database approach
         
-        # Try to find the sector, case-insensitive
-        matched_category = None
-        for cat in available_categories:
-            if cat.lower() == sector.lower():
-                matched_category = cat
-                break
-        
-        if not matched_category:
-            return f"<h2>Sector '{sector}' not found. Available sectors: {', '.join(available_categories)}</h2>"
+                       
+        try:
+            conn = snowflake_connect()
+            cur = conn.cursor()
 
-        cur.execute("""
-            SELECT STOCK_CODE, METRIC, QUARTER, VALUE, METRIC_CATEGORY
-            FROM FINANCIALS_QUARTERLY
-            WHERE CATEGORY=%s
-            ORDER BY METRIC_CATEGORY, STOCK_CODE, METRIC
-        """, (matched_category,))
-        rows = cur.fetchall()
-
-        if not rows:
-            return f"<h2>No data found for sector {sector}</h2>"
-
-        sector_data = {}
-        quarters = set()
-        
-        for stock, metric, quarter, value, metric_category in rows:
-            quarters.add(quarter)
-            key = (stock, metric, metric_category)
-            if key not in sector_data:
-                sector_data[key] = {}
-            sector_data[key][quarter] = value
-
-        quarters = sorted(quarters)
-
-        # Group by metric category
-        categorized_data = {}
-        for (stock, metric, metric_category), quarter_data in sector_data.items():
-            if metric_category not in categorized_data:
-                categorized_data[metric_category] = {}
+            # First, get all available sectors/categories
+            cur.execute("SELECT DISTINCT CATEGORY FROM FINANCIALS_QUARTERLY WHERE CATEGORY IS NOT NULL")
+            available_categories = [row[0] for row in cur.fetchall()]
             
-            display_key = f"{stock} - {metric}"
-            categorized_data[metric_category][display_key] = [
-                quarter_data.get(q, "") for q in quarters
-            ]
+            # Try to find the sector, case-insensitive
+            matched_category = None
+            for cat in available_categories:
+                if cat.lower() == sector.lower():
+                    matched_category = cat
+                    break
+            
+            if matched_category:
+                cur.execute("""
+                    SELECT STOCK_CODE, METRIC, QUARTER, VALUE, METRIC_CATEGORY
+                    FROM FINANCIALS_QUARTERLY
+                    WHERE CATEGORY=%s
+                    ORDER BY METRIC_CATEGORY, STOCK_CODE, METRIC
+                """, (matched_category,))
+                
+                rows = cur.fetchall()
 
-        conn.close()
-        return render_template("sector.html",
-                               sector=sector,
-                               quarters=quarters,
-                               financial_data=json.dumps(categorized_data))
+                if rows:
+                    # Process database data
+                    
+                    sector_data = {}
+                    quarters = set()
+                    
+                    for stock, metric, quarter, value, metric_category in rows:
+                        
+                        quarters.add(quarter)
+                        key = (stock, metric, metric_category)
+                        if key not in sector_data:
+                            sector_data[key] = {}
+                        sector_data[key][quarter] = value
+
+                    quarters = sorted(quarters)
+
+                    # Group by metric category
+                    categorized_data = {}
+                    for (stock, metric, metric_category), quarter_data in sector_data.items():
+                        
+                        if metric_category not in categorized_data:
+                            categorized_data[metric_category] = {}
+                        
+                        display_key = f"{stock} - {metric}"
+                        categorized_data[metric_category][display_key] = [
+                            quarter_data.get(q, "") for q in quarters
+                        ]
+
+                    conn.close()
+                    logger.warning(f"Returning Data for render {matched_category}: {matched_category}")
+                    return render_template("sector.html",
+                                           sector=sector,
+                                           quarters=quarters,
+                                           financial_data=(categorized_data),
+                                           financial_json=json.dumps(categorized_data))
+                    
+            conn.close()
+        except Exception as db_error:
+            logger.warning(f"Database approach failed for sector {sector}: {db_error}")
+        
+        # Fallback to using fallback data
+        return serve_fallback_sector_view(sector)
     
     except Exception as e:
         logger.error(f"Error in sector view for {sector}: {e}")
-        return f"<h2>Error loading data for sector {sector}</h2>"
+        return serve_fallback_sector_view(sector)
+
+def serve_fallback_sector_view(sector: str):
+    """Serve sector comparison using fallback data"""
+    try:
+        # Normalize sector name
+        sector_normalized = sector.replace("%20", " ").replace("+", " ").strip()
+        
+        # Find stocks in this sector using fallback data
+        sector_stocks = []
+        for stock_code, stock_info in FALLBACK_FINANCIAL_DATA.items():
+            if stock_info["category"].lower() == sector_normalized.lower():
+                sector_stocks.append(stock_code)
+        
+        if not sector_stocks:
+            available_sectors = list(set([info["category"] for info in FALLBACK_FINANCIAL_DATA.values()]))
+            return f"""
+            <div class="container mt-5">
+                <div class="alert alert-warning">
+                    <h4>⚠️ Sector '{sector_normalized}' not found</h4>
+                    <p><strong>Available sectors:</strong> {', '.join(available_sectors)}</p>
+                    <div class="mt-3">
+                        <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+                        {' '.join([f'<a href="/sector/{cat}" class="btn btn-outline-primary">{cat}</a>' for cat in available_sectors])}
+                    </div>
+                </div>
+            </div>
+            """
+        
+        # Get common quarters (should be same for all stocks)
+        quarters = FALLBACK_FINANCIAL_DATA[sector_stocks[0]]["quarters"]
+        
+        # Organize data by metric category
+        categorized_data = {}
+        
+        for stock_code in sector_stocks:
+            stock_data = FALLBACK_FINANCIAL_DATA[stock_code]["data"]
+            
+            for metric, values in stock_data.items():
+                # Categorize the metric
+                metric_category = categorize_metric(metric)
+                
+                if metric_category not in categorized_data:
+                    categorized_data[metric_category] = {}
+                
+                # Create display key
+                display_key = f"{stock_code} - {metric}"
+                categorized_data[metric_category][display_key] = values
+        
+        # Create HTML for sector comparison
+        html = f"""
+        <div class="container mt-4">
+            <div class="alert alert-info mb-4">
+                <h4>📊 {sector_normalized} Sector Comparison</h4>
+                <p><strong>Note:</strong> Using sample data for demonstration. Stocks: {', '.join(sector_stocks)}</p>
+                <p><strong>Quarters:</strong> {', '.join(quarters)}</p>
+            </div>
+            
+            <h2><i class="fas fa-industry"></i> {sector_normalized} Sector Analysis</h2>
+        """
+        
+        # Add categorized tables
+        for category, metrics in categorized_data.items():
+            html += f"""
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h4>{category}</h4>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Stock - Metric</th>
+            """
+            
+            for quarter in quarters:
+                html += f'<th class="text-center">{quarter}</th>'
+            
+            html += """
+                                </tr>
+                            </thead>
+                            <tbody>
+            """
+            
+            for display_key, values in metrics.items():
+                html += f'<tr><td class="fw-bold">{display_key}</td>'
+                for value in values:
+                    # Clean up value display
+                    clean_value = str(value).replace(",", "")
+                    try:
+                        # Try to format as number if possible
+                        float_val = float(clean_value)
+                        if float_val > 1000:
+                            formatted_value = f"{float_val:,.0f}"
+                        else:
+                            formatted_value = f"{float_val:.1f}"
+                    except:
+                        formatted_value = str(value)
+                    
+                    html += f'<td class="text-center">{formatted_value}</td>'
+                html += '</tr>'
+            
+            html += """
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            """
+        
+        html += f"""
+            <div class="mt-4">
+                <a href="/" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+                <a href="/sector/Large%20Cap" class="btn btn-outline-primary">Large Cap</a>
+                <a href="/sector/Mid%20Cap" class="btn btn-outline-success">Mid Cap</a>
+                <a href="/sector/Small%20Cap" class="btn btn-outline-warning">Small Cap</a>
+            </div>
+        </div>
+        
+        <style>
+            .card-header h4 {{
+                margin: 0;
+                color: #495057;
+            }}
+            .table th {{
+                background-color: #343a40 !important;
+                color: white !important;
+                border: none !important;
+            }}
+            .table-striped tbody tr:nth-of-type(odd) {{
+                background-color: rgba(0,123,255,.05);
+            }}
+            .fw-bold {{
+                font-weight: 600 !important;
+            }}
+        </style>
+        """
+        
+        return html
+        
+    except Exception as e:
+        logger.error(f"Error in fallback sector view for {sector}: {e}")
+        return f"""
+        <div class="container mt-5">
+            <div class="alert alert-danger">
+                <h4>❌ Error in Sector Comparison</h4>
+                <p>Error: {str(e)}</p>
+                <a href="/" class="btn btn-primary">← Back to Dashboard</a>
+            </div>
+        </div>
+        """
 
 @app.route("/")
 def index():
@@ -1003,17 +1170,6 @@ def create_snowflake_table():
             )
         """)
         
-        # Create indexes for better performance
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_stock_metric_quarter 
-            ON FINANCIALS_QUARTERLY (STOCK_CODE, METRIC, QUARTER)
-        """)
-        
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_metric_category 
-            ON FINANCIALS_QUARTERLY (METRIC_CATEGORY)
-        """)
-        
         conn.commit()
         conn.close()
         logger.info("✅ Enhanced table created/verified successfully")
@@ -1069,7 +1225,6 @@ def insert_quarterly_to_snowflake(conn, stock_code: str, financials: Dict, quart
                 UPDATE SET 
                     VALUE = src.VALUE,
                     INDUSTRY = src.INDUSTRY,
-                    CATEGORY = src.CATEGORY,
                     METRIC_CATEGORY = src.METRIC_CATEGORY,
                     UPDATED_AT = CURRENT_TIMESTAMP()
             WHEN NOT MATCHED THEN 
@@ -1289,77 +1444,106 @@ def api_metrics_by_category(category):
 
 @app.route("/simple-quarterly/<stock>")
 def simple_quarterly_view(stock):
-    """Ultra-simple quarterly view using hardcoded data to test basic functionality"""
+    """Ultra-simple quarterly view using fallback data to test basic functionality"""
     stock = stock.upper()
     
-    # Hardcoded data to ensure it works
-    if stock == "RELIANCE":
-        return f"""
-        <div style="font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; padding: 20px;">
-            <h1>📊 {stock} - Simple Quarterly View</h1>
-            
-            <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <p><strong>✅ This is working!</strong> Hardcoded data displayed successfully.</p>
-            </div>
-            
-            <h3>Financial Ratios</h3>
-            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                <thead>
-                    <tr style="background: #f8f9fa;">
-                        <th style="padding: 10px; border: 1px solid #ddd;">Metric</th>
-                        <th style="padding: 10px; border: 1px solid #ddd;">Mar 2023</th>
-                        <th style="padding: 10px; border: 1px solid #ddd;">Jun 2023</th>
-                        <th style="padding: 10px; border: 1px solid #ddd;">Sep 2023</th>
-                        <th style="padding: 10px; border: 1px solid #ddd;">Dec 2023</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Sales</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">215,000</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">218,000</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">220,000</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">225,000</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">Net Profit</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">15,000</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">16,000</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">17,000</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">18,000</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">ROE %</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">15.5</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">16.2</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">16.8</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">17.1</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">EPS</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">25.5</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">26.8</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">28.1</td>
-                        <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">29.5</td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <div style="margin: 30px 0;">
-                <a href="/" style="background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
-                <a href="/quarterly/RELIANCE" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Try Complex Version</a>
-                <a href="/debug-fallback/RELIANCE" style="background: #17a2b8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Debug Data</a>
-            </div>
-        </div>
-        """
-    else:
+    # Check if stock exists in fallback data
+    if stock not in FALLBACK_FINANCIAL_DATA:
+        available_stocks = list(FALLBACK_FINANCIAL_DATA.keys())
         return f"""
         <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px;">
-            <h2>Simple view only available for RELIANCE</h2>
-            <p>Try: <a href="/simple-quarterly/RELIANCE">RELIANCE Simple View</a></p>
-            <a href="/">← Back to Dashboard</a>
+            <h2>❌ Stock {stock} not available in simple view</h2>
+            <p><strong>Available stocks:</strong> {', '.join(available_stocks)}</p>
+            <div style="margin: 20px 0;">
+                {' '.join([f'<a href="/simple-quarterly/{s}" style="background: #007bff; color: white; padding: 8px 16px; text-decoration: none; border-radius: 5px; margin: 5px;">{s}</a>' for s in available_stocks])}
+            </div>
+            <a href="/" style="background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
         </div>
         """
+    
+    # Get stock data
+    stock_info = FALLBACK_FINANCIAL_DATA[stock]
+    data = stock_info["data"]
+    quarters = stock_info["quarters"]
+    category = stock_info["category"]
+    industry = stock_info["industry"]
+    
+    # Build HTML
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 20px;">
+        <h1>📊 {stock} - Simple Quarterly View</h1>
+        
+        <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p><strong>✅ This is working!</strong> Simple fallback data displayed successfully.</p>
+            <p><strong>Category:</strong> {category} | <strong>Industry:</strong> {industry}</p>
+        </div>
+        
+        <h3>📅 Quarters: {', '.join(quarters)}</h3>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <thead>
+                <tr style="background: #f8f9fa;">
+                    <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Metric</th>
+    """
+    
+    # Add quarter headers
+    for quarter in quarters:
+        html += f'<th style="padding: 10px; border: 1px solid #ddd; text-align: center;">{quarter}</th>'
+    
+    html += """
+                </tr>
+            </thead>
+            <tbody>
+    """
+    
+    # Add data rows
+    for metric, values in data.items():
+        html += f'<tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">{metric}</td>'
+        for value in values:
+            # Format the value for display
+            display_value = str(value).replace(",", "")
+            try:
+                float_val = float(display_value)
+                if float_val > 1000:
+                    formatted_value = f"{float_val:,.0f}"
+                else:
+                    formatted_value = f"{float_val:.1f}"
+            except:
+                formatted_value = str(value)
+            
+            html += f'<td style="padding: 10px; border: 1px solid #ddd; text-align: center;">{formatted_value}</td>'
+        html += '</tr>'
+    
+    html += f"""
+            </tbody>
+        </table>
+        
+        <div style="margin: 30px 0;">
+            <a href="/" style="background: #6c757d; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
+            <a href="/quarterly/{stock}" style="background: #dc3545; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Try Complex Version</a>
+            <a href="/debug-fallback/{stock}" style="background: #17a2b8; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Debug Data</a>
+            <a href="/sector/{category.replace(' ', '%20')}" style="background: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Compare {category}</a>
+        </div>
+        
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h5>🧪 Test Other Stocks:</h5>
+            <div style="margin-top: 10px;">
+    """
+    
+    # Add links to other stocks
+    for other_stock in FALLBACK_FINANCIAL_DATA.keys():
+        if other_stock != stock:
+            color = "#007bff" if other_stock in ["RELIANCE", "TCS", "ITC"] else "#28a745" if other_stock in ["PIDILITIND", "CUMMINSIND"] else "#ffc107"
+            text_color = "white" if color != "#ffc107" else "black"
+            html += f'<a href="/simple-quarterly/{other_stock}" style="background: {color}; color: {text_color}; padding: 8px 16px; text-decoration: none; border-radius: 5px; margin: 5px; display: inline-block;">{other_stock}</a>'
+    
+    html += """
+            </div>
+        </div>
+    </div>
+    """
+    
+    return html
 
 @app.route("/debug-fallback/<stock>")
 def debug_fallback(stock):
@@ -1521,6 +1705,7 @@ def diagnostic():
 
 # ------------------- Fallback Data for Testing -------------------
 FALLBACK_FINANCIAL_DATA = {
+    # Large Cap Stocks
     "RELIANCE": {
         "data": {
             "Sales": ["2,15,000", "2,18,000", "2,20,000", "2,25,000"],
@@ -1565,6 +1750,70 @@ FALLBACK_FINANCIAL_DATA = {
         "quarters": ["Mar 2023", "Jun 2023", "Sep 2023", "Dec 2023"],
         "category": "Large Cap",
         "industry": "FMCG"
+    },
+    
+    # Mid Cap Stocks
+    "PIDILITIND": {
+        "data": {
+            "Sales": ["8,500", "8,800", "9,200", "9,600"],
+            "Net Profit": ["1,200", "1,350", "1,450", "1,600"],
+            "Total Assets": ["12,000", "12,500", "13,000", "13,500"],
+            "Equity": ["8,500", "8,800", "9,100", "9,400"],
+            "ROE %": ["18.2", "19.1", "19.8", "20.5"],
+            "ROCE %": ["22.1", "23.2", "24.1", "25.0"],
+            "Current Ratio": ["2.8", "2.9", "3.1", "3.2"],
+            "EPS": ["45.2", "48.1", "51.3", "54.8"]
+        },
+        "quarters": ["Mar 2023", "Jun 2023", "Sep 2023", "Dec 2023"],
+        "category": "Mid Cap",
+        "industry": "Chemicals"
+    },
+    "CUMMINSIND": {
+        "data": {
+            "Sales": ["18,500", "19,200", "20,100", "21,000"],
+            "Net Profit": ["2,100", "2,300", "2,500", "2,700"],
+            "Total Assets": ["22,000", "22,800", "23,500", "24,200"],
+            "Equity": ["16,500", "17,000", "17,500", "18,000"],
+            "ROE %": ["14.8", "15.5", "16.2", "17.0"],
+            "ROCE %": ["16.2", "17.1", "18.0", "18.9"],
+            "Current Ratio": ["1.9", "2.0", "2.1", "2.2"],
+            "EPS": ["65.8", "68.2", "71.5", "75.1"]
+        },
+        "quarters": ["Mar 2023", "Jun 2023", "Sep 2023", "Dec 2023"],
+        "category": "Mid Cap",
+        "industry": "Auto Components"
+    },
+    
+    # Small Cap Stocks
+    "HATSUN": {
+        "data": {
+            "Sales": ["1,850", "1,920", "2,050", "2,180"],
+            "Net Profit": ["125", "142", "158", "175"],
+            "Total Assets": ["2,200", "2,350", "2,480", "2,620"],
+            "Equity": ["1,500", "1,580", "1,650", "1,720"],
+            "ROE %": ["12.5", "13.2", "14.1", "15.0"],
+            "ROCE %": ["15.8", "16.5", "17.2", "18.1"],
+            "Current Ratio": ["1.5", "1.6", "1.7", "1.8"],
+            "EPS": ["8.2", "9.1", "10.3", "11.5"]
+        },
+        "quarters": ["Mar 2023", "Jun 2023", "Sep 2023", "Dec 2023"],
+        "category": "Small Cap",
+        "industry": "Food Products"
+    },
+    "BALAMINES": {
+        "data": {
+            "Sales": ["2,250", "2,380", "2,520", "2,680"],
+            "Net Profit": ["285", "315", "345", "380"],
+            "Total Assets": ["3,200", "3,400", "3,600", "3,800"],
+            "Equity": ["2,100", "2,200", "2,300", "2,400"],
+            "ROE %": ["16.8", "17.5", "18.2", "19.1"],
+            "ROCE %": ["19.2", "20.1", "21.0", "22.0"],
+            "Current Ratio": ["2.2", "2.3", "2.4", "2.5"],
+            "EPS": ["22.8", "25.2", "27.6", "30.4"]
+        },
+        "quarters": ["Mar 2023", "Jun 2023", "Sep 2023", "Dec 2023"],
+        "category": "Small Cap",
+        "industry": "Chemicals"
     }
 }
 
